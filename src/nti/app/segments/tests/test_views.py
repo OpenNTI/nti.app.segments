@@ -30,7 +30,7 @@ from nti.dataserver.tests import mock_dataserver as mock_ds
 
 from nti.ntiids.ntiids import find_object_with_ntiid
 
-from nti.segments.model import Segment
+from nti.segments.model import UserSegment
 
 
 class WorkspaceTestMixin(TestBaseMixin):
@@ -78,7 +78,7 @@ class TestCreateSegments(ApplicationLayerTest,
 
         res = self.testapp.post_json(create_path,
                                      {
-                                         "MimeType": Segment.mime_type,
+                                         "MimeType": UserSegment.mime_type,
                                          "title": title
                                      },
                                      **kwargs)
@@ -230,7 +230,7 @@ class TestCreateSegments(ApplicationLayerTest,
         }))
 
         assert_that(res["Items"][0], has_entries({
-            "MimeType": Segment.mime_type,
+            "MimeType": UserSegment.mime_type,
             "title": "sa one segment",
             "Creator": "site.admin.one",
             "filter_set": none(),
