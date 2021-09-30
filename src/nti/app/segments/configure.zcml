@@ -1,5 +1,5 @@
 <!-- -*- mode: nxml -*- -->
-<configure	xmlns="http://namespaces.zope.org/zope">
+<configure xmlns="http://namespaces.zope.org/zope">
 
     <include package="zope.component" file="meta.zcml" />
     <include package="zope.security" file="meta.zcml" />
