@@ -19,6 +19,7 @@ from nti.appserver.ugd_edit_views import UGDPutView
 
 from nti.dataserver.authorization import ACT_CREATE
 from nti.dataserver.authorization import ACT_DELETE
+from nti.dataserver.authorization import ACT_LIST
 from nti.dataserver.authorization import ACT_READ
 from nti.dataserver.authorization import ACT_UPDATE
 
@@ -91,7 +92,7 @@ class DeleteSegmentView(AbstractAuthenticatedView):
 @view_config(route_name='objects.generic.traversal',
              request_method='GET',
              renderer='rest',
-             permission=ACT_READ,
+             permission=ACT_LIST,
              context=ISegmentsContainer)
 class SiteSegmentsView(BatchingUtilsMixin,
                        AbstractAuthenticatedView):

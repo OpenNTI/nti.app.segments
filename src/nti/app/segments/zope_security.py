@@ -14,6 +14,7 @@ from zope.securitypolicy.rolepermission import AnnotationRolePermissionManager
 
 from nti.dataserver.authorization import ACT_CREATE
 from nti.dataserver.authorization import ACT_DELETE
+from nti.dataserver.authorization import ACT_LIST
 from nti.dataserver.authorization import ACT_READ
 from nti.dataserver.authorization import ACT_UPDATE
 from nti.dataserver.authorization import ROLE_ADMIN
@@ -25,7 +26,7 @@ from nti.segments.interfaces import ISegmentsContainer
 @interface.implementer(IPrincipalPermissionManager)
 class SegmentsContainerRolePermissionManager(AnnotationRolePermissionManager):
 
-    ADMIN_PERMS = (ACT_CREATE, ACT_READ, ACT_UPDATE, ACT_DELETE)
+    ADMIN_PERMS = (ACT_CREATE, ACT_READ, ACT_UPDATE, ACT_DELETE, ACT_LIST)
 
     def __init__(self, context):
         super(SegmentsContainerRolePermissionManager, self).__init__(context)
