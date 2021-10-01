@@ -104,7 +104,6 @@ class SegmentSummary(object):
 
     @property
     def creator_display_name(self):
-        from IPython.terminal.debugger import set_trace; set_trace()
         segment = self.segment
         user = User.get_user(segment.creator)
         display_name_generator = component.queryMultiAdapter((user, self.request),
