@@ -10,6 +10,10 @@ from operator import attrgetter
 from pyramid import httpexceptions as hexc
 from pyramid.view import view_config
 
+from zc.displayname.interfaces import IDisplayNameGenerator
+
+from zope import component
+
 from nti.app.base.abstract_views import AbstractAuthenticatedView
 
 from nti.app.externalization.view_mixins import BatchingUtilsMixin
@@ -22,6 +26,8 @@ from nti.dataserver.authorization import ACT_DELETE
 from nti.dataserver.authorization import ACT_LIST
 from nti.dataserver.authorization import ACT_READ
 from nti.dataserver.authorization import ACT_UPDATE
+
+from nti.dataserver.users import User
 
 from nti.externalization.interfaces import LocatedExternalDict
 from nti.externalization.interfaces import StandardExternalFields
@@ -48,6 +54,7 @@ class CreateSegmentView(ModeledContentUploadRequestUtilsMixin,
     def _do_call(self):
         creator = self.remoteUser
         segment = self.readCreateUpdateContentObject(creator)
+        segment.creator = creator.username
         segment = self.context.add(segment)
 
         self.request.response.status_int = 201
@@ -89,6 +96,28 @@ class DeleteSegmentView(AbstractAuthenticatedView):
         return hexc.HTTPNoContent()
 
 
+class SegmentSummary(object):
+
+    def __init__(self, segment, request):
+        self.segment = segment
+        self.request = request
+
+    @property
+    def creator_display_name(self):
+        from IPython.terminal.debugger import set_trace; set_trace()
+        segment = self.segment
+        user = User.get_user(segment.creator)
+        display_name_generator = component.queryMultiAdapter((user, self.request),
+                                                             IDisplayNameGenerator)
+        if display_name_generator is None:
+            return segment.creator
+
+        return display_name_generator()
+
+    def __getattr__(self, item):
+        return getattr(self.segment, item)
+
+
 @view_config(route_name='objects.generic.traversal',
              request_method='GET',
              renderer='rest',
@@ -124,7 +153,7 @@ class SiteSegmentsView(BatchingUtilsMixin,
     _default_sort = 'title'
     _sort_keys = {
         'title': attrgetter('title'),
-        'creator': attrgetter('creator'),
+        'creator': attrgetter('creator_display_name'),
         'createdtime': attrgetter('createdTime'),
         'lastmodified': attrgetter('lastModified'),
     }
@@ -169,7 +198,8 @@ class SiteSegmentsView(BatchingUtilsMixin,
         search = self.request.params.get('filter')
         filter_param = search and search.lower()
 
-        items = self.context.values()
+        items = [SegmentSummary(segment, self.request)
+                 for segment in self.context.values()]
         if filter_param:
             items = self._search_items(filter_param, items)
 

@@ -28,6 +28,8 @@ from nti.dataserver.authorization import ROLE_ADMIN
 
 from nti.dataserver.tests import mock_dataserver as mock_ds
 
+from nti.dataserver.users.interfaces import IFriendlyNamed
+
 from nti.ntiids.ntiids import find_object_with_ntiid
 
 from nti.segments.model import UserSegment
@@ -209,6 +211,10 @@ class TestCreateSegments(ApplicationLayerTest,
 
             self._assign_role(ROLE_ADMIN, username=u'nti.admin')
 
+            IFriendlyNamed(self._get_user('site.admin.one')).realname = u'One'
+            IFriendlyNamed(self._get_user('site.admin.two')).realname = u'Two'
+            IFriendlyNamed(self._get_user('nti.admin')).realname = u'Three'
+
         # Non-admins have no access
         self.forbid_workspace_link('Segments', extra_environ=non_admin_env)
         self._list_segments(via_workspace=False,
@@ -308,7 +314,7 @@ class TestCreateSegments(ApplicationLayerTest,
         assert_order({'sortOn': 'name', 'sortOrder': 'descending'},
                      (title_two, title_one, title_three))
         assert_order({'sortOn': 'creator'},
-                     (title_three, title_one, title_two))
+                     (title_one, title_three, title_two))
         assert_order({'sortOn': 'createdtime'},
                      (title_one, title_two, title_three))
         assert_order({'sortOn': 'lastmodified'},
