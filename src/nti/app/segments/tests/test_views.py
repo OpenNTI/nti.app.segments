@@ -10,9 +10,11 @@ import time
 
 from hamcrest import assert_that
 from hamcrest import contains
+from hamcrest import described_as
 from hamcrest import has_entries
 from hamcrest import has_length
 from hamcrest import is_
+from hamcrest import is_not
 from hamcrest import none
 from hamcrest import not_none
 
@@ -39,24 +41,31 @@ class WorkspaceTestMixin(TestBaseMixin):
 
     WORKSPACE_NAME = None
 
-    def get_workspace(self, kwargs):
+    def get_workspace(self, ws_name, kwargs):
         path = b'/dataserver2/service'
         res = self.testapp.get(path, **kwargs)
         workspace = [ws for ws in res.json_body['Items']
-                     if ws['Title'] == self.WORKSPACE_NAME]
+                     if ws['Title'] == ws_name]
 
-        assert_that(workspace, has_length(1))
-        return workspace[0]
+        return workspace[0] if workspace else None
 
-    def get_workspace_link(self, rel_name, **kwargs):
-        workspace = self.get_workspace(kwargs)
-        create_users_href = self.require_link_href_with_rel(workspace,
-                                                            rel_name)
-        return create_users_href
+    def get_workspace_collection(self, ws_name, collection_name, **kwargs):
+        workspace = self.get_workspace(ws_name, kwargs)
+        assert_that(workspace, not_none())
 
-    def forbid_workspace_link(self, rel_name, **kwargs):
-        workspace = self.get_workspace(kwargs)
-        create_users_href = self.forbid_link_with_rel(workspace, rel_name)
+        collection = [c for c in workspace.get('Items', ())
+                      if c.get('Class') == 'Collection' and c.get('Title') == collection_name]
+
+        collection = collection[0] if collection else None
+        assert_that(collection, described_as("A collection named",
+                                             is_not(none()),
+                                             collection_name))
+
+        return collection.get('href')
+
+    def forbid_workspace(self, ws_name, **kwargs):
+        workspace = self.get_workspace(ws_name, kwargs)
+        assert_that(workspace, is_(none()), ws_name)
 
 
 class TestCreateSegments(ApplicationLayerTest,
@@ -75,8 +84,9 @@ class TestCreateSegments(ApplicationLayerTest,
         workspace_kwargs = dict()
         if 'extra_environ' in kwargs:
             workspace_kwargs['extra_environ'] = kwargs['extra_environ']
-        create_path = self.get_workspace_link('Segments',
-                                              **workspace_kwargs)
+        create_path = self.get_workspace_collection('SiteAdmin',
+                                                    'Segments',
+                                                    **workspace_kwargs)
 
         res = self.testapp.post_json(create_path,
                                      {
@@ -110,7 +120,7 @@ class TestCreateSegments(ApplicationLayerTest,
             self.make_site_admins('site.admin.one', 'site.admin.two')
 
         # Only (site) admins can create/list
-        self.forbid_workspace_link('Segments', extra_environ=joe_env)
+        self.forbid_workspace('SiteAdmin', extra_environ=joe_env)
 
         # Create
         create_path = u'/dataserver2/++etc++hostsites/alpha.nextthought.com/++etc++site/default/segments-container'
@@ -181,8 +191,9 @@ class TestCreateSegments(ApplicationLayerTest,
             workspace_kwargs = dict()
             if 'extra_environ' in kwargs:
                 workspace_kwargs['extra_environ'] = kwargs['extra_environ']
-            list_path = self.get_workspace_link('Segments',
-                                                **workspace_kwargs)
+            list_path = self.get_workspace_collection('SiteAdmin',
+                                                      'Segments',
+                                                      **workspace_kwargs)
         else:
             list_path = os.path.join('/dataserver2',
                                      '++etc++hostsites',
@@ -216,7 +227,7 @@ class TestCreateSegments(ApplicationLayerTest,
             IFriendlyNamed(self._get_user('nti.admin')).realname = u'Three'
 
         # Non-admins have no access
-        self.forbid_workspace_link('Segments', extra_environ=non_admin_env)
+        self.forbid_workspace('SiteAdmin', extra_environ=non_admin_env)
         self._list_segments(via_workspace=False,
                             extra_environ=non_admin_env,
                             status=403)

@@ -14,15 +14,13 @@
              provides="zope.generations.interfaces.IInstallableSchemaManager" />
 
     <!-- Workspaces -->
-    <subscriber factory=".workspaces.SegmentsWorkspace"
-                provides=".interfaces.ISegmentsWorkspace" />
-
     <subscriber handler=".subscribers.install_site_segments_container"
                 for="nti.site.interfaces.IHostPolicySiteManager
                      zope.site.interfaces.INewLocalSite"/>
 
-    <adapter factory=".workspaces.SegmentsWorkspace"
-             provides=".interfaces.ISegmentsWorkspace" />
+    <subscriber factory=".workspaces.SegmentsCollection"
+                for="nti.app.site.workspaces.interfaces.ISiteAdminWorkspace"
+                provides=".interfaces.ISegmentsCollection" />
 
     <!-- ACL -->
     <adapter factory=".acl.SegmentsContainerACLProvider"

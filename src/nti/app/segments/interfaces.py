@@ -8,10 +8,10 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-from nti.appserver.workspaces.interfaces import IWorkspace
+from nti.app.site.workspaces.interfaces import ISiteAdminCollection
 
 
-class ISegmentsWorkspace(IWorkspace):
+class ISegmentsCollection(ISiteAdminCollection):
     """
-    A workspace containing data for segments.
+    Collection of segments supplied as a collection in the site admin workspace.
     """

@@ -65,6 +65,7 @@ setup(
 	'nti.metadata',
         'nti.property',
         'nti.schema',
+        'nti.app.site',
         'requests',
         'pyramid',
         'six',

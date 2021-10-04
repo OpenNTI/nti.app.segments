@@ -19,6 +19,8 @@ from nti.app.base.abstract_views import AbstractAuthenticatedView
 from nti.app.externalization.view_mixins import BatchingUtilsMixin
 from nti.app.externalization.view_mixins import ModeledContentUploadRequestUtilsMixin
 
+from nti.app.segments.interfaces import ISegmentsCollection
+
 from nti.appserver.ugd_edit_views import UGDPutView
 
 from nti.dataserver.authorization import ACT_CREATE
@@ -51,15 +53,31 @@ TOTAL = StandardExternalFields.TOTAL
 class CreateSegmentView(ModeledContentUploadRequestUtilsMixin,
                         AbstractAuthenticatedView):
 
+    @property
+    def _container(self):
+        return self.context
+
     def _do_call(self):
         creator = self.remoteUser
         segment = self.readCreateUpdateContentObject(creator)
         segment.creator = creator.username
-        segment = self.context.add(segment)
+        segment = self._container.add(segment)
 
         self.request.response.status_int = 201
 
         return segment
+
+
+@view_config(route_name='objects.generic.traversal',
+             request_method='POST',
+             renderer='rest',
+             permission=ACT_CREATE,
+             context=ISegmentsCollection)
+class CreateSegmentInCollectionView(CreateSegmentView):
+
+    @property
+    def _container(self):
+        return self.context.container
 
 
 @view_config(route_name='objects.generic.traversal',
@@ -190,6 +208,10 @@ class SiteSegmentsView(BatchingUtilsMixin,
 
         return results
 
+    @property
+    def _container(self):
+        return self.context
+
     def _get_items(self, result_dict):
         """
         Sort and batch records.
@@ -198,7 +220,7 @@ class SiteSegmentsView(BatchingUtilsMixin,
         filter_param = search and search.lower()
 
         items = [SegmentSummary(segment, self.request)
-                 for segment in self.context.values()]
+                 for segment in self._container.values()]
         if filter_param:
             items = self._search_items(filter_param, items)
 
@@ -223,3 +245,15 @@ class SiteSegmentsView(BatchingUtilsMixin,
         result_dict[ITEMS] = self._get_items(result_dict)
 
         return result_dict
+
+
+@view_config(route_name='objects.generic.traversal',
+             request_method='GET',
+             renderer='rest',
+             permission=ACT_LIST,
+             context=ISegmentsCollection)
+class SiteSegmentsInCollectionView(SiteSegmentsView):
+
+    @property
+    def _container(self):
+        return self.context.container
