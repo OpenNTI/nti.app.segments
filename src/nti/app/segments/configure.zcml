@@ -1,0 +1,40 @@
+<!-- -*- mode: nxml -*- -->
+<configure xmlns="http://namespaces.zope.org/zope">
+
+    <include package="zope.component" file="meta.zcml" />
+    <include package="zope.security" file="meta.zcml" />
+    <include package="zope.component" />
+    <include package="zope.security" />
+
+    <include package="nti.segments" />
+
+    <!-- Generations -->
+    <utility factory=".generations.install._SchemaManager"
+             name="nti.dataserver-app-segments"
+             provides="zope.generations.interfaces.IInstallableSchemaManager" />
+
+    <!-- Workspaces -->
+    <subscriber handler=".subscribers.install_site_segments_container"
+                for="nti.site.interfaces.IHostPolicySiteManager
+                     zope.site.interfaces.INewLocalSite"/>
+
+    <subscriber factory=".workspaces.SegmentsCollection"
+                for="nti.app.site.workspaces.interfaces.ISiteAdminWorkspace"
+                provides=".interfaces.ISegmentsCollection" />
+
+    <!-- ACL -->
+    <adapter factory=".acl.SegmentsContainerACLProvider"
+             for="nti.segments.interfaces.ISegmentsContainer"
+             provides="nti.coremetadata.interfaces.IACLProvider" />
+
+    <!-- Provide appropriate permissions for nti admins to manage segments -->
+    <adapter factory=".zope_security.SegmentsContainerRolePermissionManager"
+             provides="zope.securitypolicy.interfaces.IRolePermissionMap"
+             for="nti.segments.interfaces.ISegmentsContainer" />
+
+    <!-- Decorators -->
+    <subscriber factory="nti.appserver.pyramid_renderers_edit_link_decorator.EditLinkDecorator"
+                provides="nti.externalization.interfaces.IExternalMappingDecorator"
+                for="nti.segments.interfaces.ISegment
+                     pyramid.interfaces.IRequest" />
+</configure>

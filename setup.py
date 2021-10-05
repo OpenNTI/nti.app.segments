@@ -1,6 +1,7 @@
 import codecs
-from setuptools import setup
+
 from setuptools import find_packages
+from setuptools import setup
 
 entry_points = {
     "z3c.autoinclude.plugin": [
@@ -14,6 +15,7 @@ TESTS_REQUIRE = [
     'nti.dataserver[test]',
     'nti.testing',
     'zope.testrunner',
+    'nti.app.sites.alpha',
 ]
 
 
@@ -63,6 +65,7 @@ setup(
 	'nti.metadata',
         'nti.property',
         'nti.schema',
+        'nti.app.site',
         'requests',
         'pyramid',
         'six',
