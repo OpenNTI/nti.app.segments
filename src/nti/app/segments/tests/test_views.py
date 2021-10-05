@@ -156,7 +156,8 @@ class TestCreateSegments(ApplicationLayerTest,
         }))
 
         # Update
-        res = self.testapp.put_json(segment_url,
+        edit_url = self.require_link_href_with_rel(res, 'edit')
+        res = self.testapp.put_json(edit_url,
                                     dict(title='updated segment')).json_body
         assert_that(res, has_entries({
             "title": u"updated segment",
@@ -168,7 +169,7 @@ class TestCreateSegments(ApplicationLayerTest,
         }))
 
         #       Other site admins can also update
-        res = self.testapp.put_json(segment_url, dict(title='my segment'),
+        res = self.testapp.put_json(edit_url, dict(title='my segment'),
                                     extra_environ=site_admin_two_env).json_body
         assert_that(res, has_entries({
             "title": u"my segment",
@@ -180,10 +181,11 @@ class TestCreateSegments(ApplicationLayerTest,
         }))
 
         # Delete
-        self.testapp.delete(segment_url, extra_environ=site_admin_two_env,
+        delete_url = self.require_link_href_with_rel(res, 'delete')
+        self.testapp.delete(delete_url, extra_environ=site_admin_two_env,
                             status=204)
 
-        self.testapp.get(segment_url, extra_environ=site_admin_one_env,
+        self.testapp.get(delete_url, extra_environ=site_admin_one_env,
                          status=404)
 
     def _list_segments(self, via_workspace=True, **kwargs):

@@ -37,4 +37,10 @@
                 provides="nti.externalization.interfaces.IExternalMappingDecorator"
                 for="nti.segments.interfaces.ISegment
                      pyramid.interfaces.IRequest" />
+
+    <subscriber factory=".decorators.DeleteLinkSegmentDecorator"
+                for="nti.segments.interfaces.ISegment
+                     pyramid.interfaces.IRequest"
+                provides="nti.externalization.interfaces.IExternalMappingDecorator"/>
+
 </configure>
