@@ -1,5 +1,6 @@
 <!-- -*- mode: nxml -*- -->
-<configure xmlns="http://namespaces.zope.org/zope">
+<configure xmlns="http://namespaces.zope.org/zope"
+           xmlns:zcml="http://namespaces.zope.org/zcml">
 
     <include package="zope.component" file="meta.zcml" />
     <include package="zope.security" file="meta.zcml" />
@@ -18,9 +19,11 @@
                 for="nti.site.interfaces.IHostPolicySiteManager
                      zope.site.interfaces.INewLocalSite"/>
 
-    <subscriber factory=".workspaces.SegmentsCollection"
-                for="nti.app.site.workspaces.interfaces.ISiteAdminWorkspace"
-                provides=".interfaces.ISegmentsCollection" />
+    <configure zcml:condition="have segments">
+        <subscriber factory=".workspaces.SegmentsCollection"
+                    for="nti.app.site.workspaces.interfaces.ISiteAdminWorkspace"
+                    provides=".interfaces.ISegmentsCollection" />
+    </configure>
 
     <!-- ACL -->
     <adapter factory=".acl.SegmentsContainerACLProvider"
