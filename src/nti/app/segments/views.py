@@ -13,29 +13,55 @@ from pyramid.view import view_config
 from zc.displayname.interfaces import IDisplayNameGenerator
 
 from zope import component
+from zope import interface
+
+from zope.cachedescriptors.property import Lazy
 
 from nti.app.base.abstract_views import AbstractAuthenticatedView
 
 from nti.app.externalization.view_mixins import BatchingUtilsMixin
 from nti.app.externalization.view_mixins import ModeledContentUploadRequestUtilsMixin
 
+from nti.app.renderers.interfaces import IUncacheableInResponse
+
+from nti.app.segments import VIEW_RESOLVE
+
 from nti.app.segments.interfaces import ISegmentsCollection
 
+from nti.app.users.views.view_mixins import AbstractEntityViewMixin
+
 from nti.appserver.ugd_edit_views import UGDPutView
+
+from nti.coremetadata.interfaces import IX_ALIAS
+from nti.coremetadata.interfaces import IX_DISPLAYNAME
+from nti.coremetadata.interfaces import IX_LASTSEEN_TIME
+from nti.coremetadata.interfaces import IX_REALNAME
 
 from nti.dataserver.authorization import ACT_CREATE
 from nti.dataserver.authorization import ACT_DELETE
 from nti.dataserver.authorization import ACT_LIST
 from nti.dataserver.authorization import ACT_READ
 from nti.dataserver.authorization import ACT_UPDATE
+from nti.dataserver.authorization import ACT_SEARCH
 
+from nti.dataserver.metadata import get_metadata_catalog
+
+from nti.dataserver.metadata.index import IX_CREATEDTIME
+
+from nti.dataserver.users import get_entity_catalog
 from nti.dataserver.users import User
+
+from nti.dataserver.users.utils import intids_of_users_by_site
 
 from nti.externalization.interfaces import LocatedExternalDict
 from nti.externalization.interfaces import StandardExternalFields
 
 from nti.segments.interfaces import ISegment
 from nti.segments.interfaces import ISegmentsContainer
+
+from nti.segments.model import ResultSet
+
+from nti.site.interfaces import IHostPolicyFolder
 
 from nti.traversal.traversal import find_interface
 
@@ -112,6 +138,69 @@ class DeleteSegmentView(AbstractAuthenticatedView):
         segments_container.remove(self.context)
         self.request.response.status_int = 204
         return hexc.HTTPNoContent()
+
+
+@view_config(route_name='objects.generic.traversal',
+             request_method='GET',
+             context=ISegment,
+             name=VIEW_RESOLVE,
+             accept='application/json',
+             permission=ACT_SEARCH)
+class ResolveSegmentView(AbstractEntityViewMixin):
+
+    _ALLOWED_SORTING = AbstractEntityViewMixin._ALLOWED_SORTING + (IX_LASTSEEN_TIME,)
+
+    _NUMERIC_SORTING = AbstractEntityViewMixin._NUMERIC_SORTING + (IX_LASTSEEN_TIME,)
+
+    def check_access(self):
+        # We're using a permission check on the context of the view
+        pass
+
+    def get_externalizer(self, user):
+        # pylint: disable=no-member
+        result = 'summary'
+        if user == self.remoteUser:
+            result = 'personal-summary'
+        elif self.is_admin:
+            result = 'admin-summary'
+        elif    self.is_site_admin \
+                and self.site_admin_utility.can_administer_user(self.remoteUser, user):
+            result = 'admin-summary'
+        return result
+
+    @Lazy
+    def sortMap(self):
+        return {
+            IX_ALIAS: get_entity_catalog(),
+            IX_REALNAME: get_entity_catalog(),
+            IX_DISPLAYNAME: get_entity_catalog(),
+            IX_CREATEDTIME: get_metadata_catalog(),
+            IX_LASTSEEN_TIME: get_metadata_catalog(),
+        }
+
+    def search_include(self, doc_id):
+        # Users only
+        return self.mime_type(doc_id) == 'application/vnd.nextthought.user'
+
+    @Lazy
+    def site_name(self):
+        # obtained from the nearest IHostPolicyFolder
+        return find_interface(self.context, IHostPolicyFolder).__name__
+
+    def get_entity_intids(self, site=None):
+        # The parent class will handle any deactivated entity filtering.
+        initial_intids = intids_of_users_by_site(site, filter_deactivated=False)
+
+        if self.context.filter_set is not None:
+            rs = ResultSet(initial_intids)
+            initial_intids = self.context.filter_set.resolve(rs).intids()
+
+        return initial_intids
+
+    def __call__(self):
+        result = self._do_call()
+        interface.alsoProvides(result, IUncacheableInResponse)
+        return result
 
 
 class SegmentSummary(object):

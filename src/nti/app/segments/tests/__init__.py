@@ -5,15 +5,17 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+from zope import lifecycleevent
+
 from zope.component.hooks import getSite
 
 from zope.securitypolicy.interfaces import IPrincipalRoleManager
 
+from nti.app.users.utils import set_user_creation_site
+
 from nti.coremetadata.interfaces import IUser
 
 from nti.dataserver.authorization import ROLE_SITE_ADMIN
-
-from nti.dataserver.users.common import set_user_creation_site
 
 
 class SiteAdminTestMixin(object):
@@ -29,3 +31,4 @@ class SiteAdminTestMixin(object):
 
             set_user_creation_site(user, getSite())
             prm.assignRoleToPrincipal(ROLE_SITE_ADMIN.id, username)
+            lifecycleevent.modified(user)

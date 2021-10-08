@@ -14,3 +14,6 @@ MessageFactory = zope.i18nmessageid.MessageFactory('nti.dataserver')
 
 #: Segments workspace
 SEGMENTS = u'Segments'
+
+#: View name for resolving segments
+VIEW_RESOLVE = u'Resolve'
