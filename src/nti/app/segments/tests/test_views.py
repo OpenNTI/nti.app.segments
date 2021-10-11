@@ -5,18 +5,24 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import json
 import os
 import time
+from itertools import chain
 
 from hamcrest import assert_that
 from hamcrest import contains
 from hamcrest import described_as
 from hamcrest import has_entries
+from hamcrest import has_entry
+from hamcrest import has_item
 from hamcrest import has_length
 from hamcrest import is_
 from hamcrest import is_not
 from hamcrest import none
 from hamcrest import not_none
+
+from webob.cookies import parse_cookie
 
 from zope import lifecycleevent
 
@@ -37,6 +43,10 @@ from nti.dataserver.authorization import ROLE_ADMIN
 from nti.dataserver.tests import mock_dataserver as mock_ds
 
 from nti.dataserver.users.interfaces import IFriendlyNamed
+
+from nti.externalization.datetime import date_from_string
+
+from nti.identifiers.interfaces import IUserExternalIdentityContainer
 
 from nti.ntiids.ntiids import find_object_with_ntiid
 
@@ -486,3 +496,95 @@ class TestResolveSegmentsView(SegmentManagementTest,
 
         deactivate_url = self.require_link_href_with_rel(res['Items'][0], 'Deactivate')
         self.testapp.post(deactivate_url)
+
+    @WithSharedApplicationMockDS(users=True, testapp=True, default_authenticate=True)
+    def test_export_resolved(self):
+        with mock_ds.mock_db_trans():
+            create_site('alderaan')
+            diff_site_user = self._create_user('diff.site')
+            set_user_creation_site(diff_site_user, 'alderaan')
+            lifecycleevent.modified(diff_site_user)
+
+        with mock_ds.mock_db_trans(site_name='alpha.nextthought.com'):
+            user = self._create_user('user.one',
+                                     external_value={'realname': u'user one',
+                                                     'email': u'one@user.org'})
+            self._create_user('user.two',
+                              external_value={'realname': u'user two',
+                                              'email': u'two@user.org'})
+            self._create_user('user.three.deactivated',
+                              external_value={'realname': u'user three',
+                                              'email': u'three@user.org'})
+
+            identity_container = IUserExternalIdentityContainer(user)
+            identity_container.add_external_mapping('ext id1', 'aaaaaaa')
+            lifecycleevent.modified(user)
+
+        activated_filter_set = {
+            "MimeType": IsDeactivatedFilterSet.mime_type,
+            "Deactivated": False
+        }
+        segment = self._create_segment('Activated Users',
+                                       filter_set=activated_filter_set).json_body
+
+        # Deactivate user
+        self._deactivate_user('user.three.deactivated')
+
+        # CSV
+        params = {'sortOn': 'createdTime'}
+        headers = {'accept': str('text/csv')}
+
+        # Call without download-token param works
+        resolve_url = self.require_link_href_with_rel(segment, 'resolve')
+        resolved_users = self.testapp.get(resolve_url, params=params, headers=headers)
+        csv_contents, rows = self.normalize_userinfo_csv(resolved_users.body)
+
+        assert_that(rows, has_length(3))
+        assert_that(rows[0], is_('username,realname,alias,email,createdTime,lastLoginTime,ext id1'))
+        assert_that(rows[1], is_('user.one,User One,User One,one@user.org,,,aaaaaaa'))
+        assert_that(rows[2], is_('user.two,User Two,User Two,two@user.org,,,'))
+
+        # As does call with empty string
+        params['download-token'] = ''
+        resolved_users = self.testapp.get(resolve_url, params, status=200, headers=headers)
+        _, rows = self.normalize_userinfo_csv(resolved_users.body)
+        assert_that(rows, has_length(3))
+
+        params['download-token'] = 1234
+        resolved_users = self.testapp.get(resolve_url, params, status=200, headers=headers)
+        _, rows = self.normalize_userinfo_csv(resolved_users.body)
+        assert_that(rows, has_length(3))
+        cookies = dict(parse_cookie(resolved_users.headers['Set-Cookie']))
+        assert_that(cookies, has_item('download-1234'))
+        cookie_res = json.loads(cookies['download-1234'])
+        assert_that(cookie_res, has_entry('success', True))
+
+        normalized_body, _ = self.normalize_userinfo_csv(resolved_users.body)
+        assert_that(normalized_body, is_(csv_contents))
+
+    @staticmethod
+    def normalize_userinfo_csv(csv_contents):
+        """
+        Removes any trailing rows and, after checking for a parseable created
+        time in the fifth column, sets that column as empty
+        """
+        # Removing any trailing empty rows and split into rows
+        rows = csv_contents.rstrip().split('\r\n')
+
+        def normalize_row(row):
+            cols = row.split(',')
+            assert_that(cols, has_length(7), "Expected 7 columns: %s" % (row,))
+
+            # Ensure it parses as a date
+            date_from_string(cols[4])
+            cols[4] = ''
+
+            return ','.join(cols)
+
+        # We only want to normalize the data rows (not the header)
+        header = rows[:1]
+        data = [normalize_row(r) for r in rows[1:]]
+        rows = tuple(chain(header, data))
+        csv_contents = '\r\n'.join(rows)
+
+        return csv_contents, rows

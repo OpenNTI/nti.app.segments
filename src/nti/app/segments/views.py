@@ -18,6 +18,7 @@ from zope import interface
 from zope.cachedescriptors.property import Lazy
 
 from nti.app.base.abstract_views import AbstractAuthenticatedView
+from nti.app.base.abstract_views import download_cookie_decorator
 
 from nti.app.externalization.view_mixins import BatchingUtilsMixin
 from nti.app.externalization.view_mixins import ModeledContentUploadRequestUtilsMixin
@@ -29,6 +30,7 @@ from nti.app.segments import VIEW_RESOLVE
 from nti.app.segments.interfaces import ISegmentsCollection
 
 from nti.app.users.views.view_mixins import AbstractEntityViewMixin
+from nti.app.users.views.view_mixins import UsersCSVExportMixin
 
 from nti.appserver.ugd_edit_views import UGDPutView
 
@@ -201,6 +203,24 @@ class ResolveSegmentView(AbstractEntityViewMixin):
         result = self._do_call()
         interface.alsoProvides(result, IUncacheableInResponse)
         return result
+
+
+@view_config(route_name='objects.generic.traversal',
+             request_method='GET',
+             context=ISegment,
+             accept='text/csv',
+             name=VIEW_RESOLVE,
+             decorator=download_cookie_decorator,
+             permission=ACT_SEARCH)
+class ResolveSegmentCSVView(ResolveSegmentView,
+                            UsersCSVExportMixin):
+
+    def _get_filename(self):
+        return u'users_export-{safer_segment_name}.csv'
+
+    def __call__(self):
+        self.check_access()
+        return self._create_csv_response()
 
 
 class SegmentSummary(object):
