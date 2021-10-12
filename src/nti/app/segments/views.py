@@ -195,7 +195,7 @@ class ResolveSegmentView(AbstractEntityViewMixin):
 
         if self.context.filter_set is not None:
             rs = IntIdSet(initial_intids)
-            initial_intids = self.context.filter_set.resolve(rs).intids()
+            initial_intids = self.context.filter_set.apply(rs).intids()
 
         return initial_intids
 
