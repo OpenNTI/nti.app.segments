@@ -25,7 +25,7 @@ from nti.app.externalization.view_mixins import ModeledContentUploadRequestUtils
 
 from nti.app.renderers.interfaces import IUncacheableInResponse
 
-from nti.app.segments import VIEW_RESOLVE
+from nti.app.segments import VIEW_MEMBERS
 
 from nti.app.segments.interfaces import ISegmentsCollection
 
@@ -145,7 +145,7 @@ class DeleteSegmentView(AbstractAuthenticatedView):
 @view_config(route_name='objects.generic.traversal',
              request_method='GET',
              context=ISegment,
-             name=VIEW_RESOLVE,
+             name=VIEW_MEMBERS,
              accept='application/json',
              permission=ACT_SEARCH)
 class ResolveSegmentView(AbstractEntityViewMixin):
@@ -209,7 +209,7 @@ class ResolveSegmentView(AbstractEntityViewMixin):
              request_method='GET',
              context=ISegment,
              accept='text/csv',
-             name=VIEW_RESOLVE,
+             name=VIEW_MEMBERS,
              decorator=download_cookie_decorator,
              permission=ACT_SEARCH)
 class ResolveSegmentCSVView(ResolveSegmentView,

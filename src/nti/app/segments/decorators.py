@@ -10,7 +10,7 @@ from zope import interface
 
 from nti.app.renderers.decorators import AbstractAuthenticatedRequestAwareDecorator
 
-from nti.app.segments import VIEW_RESOLVE
+from nti.app.segments import VIEW_MEMBERS
 
 from nti.appserver.pyramid_authorization import has_permission
 
@@ -42,8 +42,8 @@ class SegmentLinkDecorator(AbstractAuthenticatedRequestAwareDecorator):
 
         if has_permission(ACT_SEARCH, context, self.request):
             links.append(Link(context,
-                              rel='resolve',
-                              elements=(VIEW_RESOLVE,),
+                              rel='members',
+                              elements=(VIEW_MEMBERS,),
                               method='GET'))
 
         if links:

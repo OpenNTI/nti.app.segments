@@ -356,10 +356,10 @@ class TestCreateSegments(SegmentManagementTest,
                      (title_two, title_three, title_one))
 
 
-class TestResolveSegmentsView(SegmentManagementTest,
-                              SiteAdminTestMixin):
+class TestSegmentMembersView(SegmentManagementTest,
+                             SiteAdminTestMixin):
 
-    def _resolve_segment(self, href, **kwargs):
+    def _segment_members(self, href, **kwargs):
         res = self.testapp.get(href, **kwargs)
 
         return res.json_body
@@ -397,13 +397,13 @@ class TestResolveSegmentsView(SegmentManagementTest,
         segment = self._create_segment('Null Filter',
                                        extra_environ=site_admin_one_env).json_body
 
-        resolve_url = self.require_link_href_with_rel(segment, 'resolve')
-        self.testapp.get(resolve_url)
-        self.testapp.get(resolve_url, extra_environ=site_admin_one_env)
-        self.testapp.get(resolve_url, extra_environ=site_admin_two_env)
+        members_url = self.require_link_href_with_rel(segment, 'members')
+        self.testapp.get(members_url)
+        self.testapp.get(members_url, extra_environ=site_admin_one_env)
+        self.testapp.get(members_url, extra_environ=site_admin_two_env)
 
-        self.testapp.get(resolve_url, extra_environ=non_admin_env, status=403)
-        self.testapp.get(resolve_url, extra_environ=diff_site_admin_env, status=403)
+        self.testapp.get(members_url, extra_environ=non_admin_env, status=403)
+        self.testapp.get(members_url, extra_environ=diff_site_admin_env, status=403)
 
     @WithSharedApplicationMockDS(users=('site.admin.one',
                                         'site.admin.two',
@@ -428,8 +428,8 @@ class TestResolveSegmentsView(SegmentManagementTest,
         res = self._create_segment('Null Filter',
                                    status=201).json_body
 
-        resolve_url = res['href'] + '/Resolve'
-        res = self._resolve_segment(resolve_url,
+        members_url = self._members_url(res)
+        res = self._segment_members(members_url,
                                     params={'sortOn': 'displayname'})
         assert_that(res['Items'], has_length(3))
         usernames = [user['Username'] for user in res['Items']]
@@ -467,27 +467,27 @@ class TestResolveSegmentsView(SegmentManagementTest,
                                              filter_set=activated_filter_set).json_body
 
         # Matches prior to deactivation
-        resolve_deactivated_url = self._resolve_url(deactivated_seg)
-        deactivated_res = self._resolve_segment(resolve_deactivated_url)
+        deactivated_members_url = self._members_url(deactivated_seg)
+        deactivated_res = self._segment_members(deactivated_members_url)
         assert_that(deactivated_res['Items'], has_length(0))
 
-        resolve_activated_url = self._resolve_url(activated_seg)
-        activated_res = self._resolve_segment(resolve_activated_url)
+        activated_members_url = self._members_url(activated_seg)
+        activated_res = self._segment_members(activated_members_url)
         assert_that(activated_res['Items'], has_length(3))
 
         # Deactivate user
         self._deactivate_user(test_username)
 
         # Matches post deactivation
-        deactivated_res = self._resolve_segment(resolve_deactivated_url)
+        deactivated_res = self._segment_members(deactivated_members_url)
         assert_that(deactivated_res['Items'], has_length(1))
         assert_that(deactivated_res['Items'][0], has_entries(Username=test_username))
 
-        activated_res = self._resolve_segment(resolve_activated_url)
+        activated_res = self._segment_members(activated_members_url)
         assert_that(activated_res['Items'], has_length(2))
 
-    def _resolve_url(self, ext_segment):
-        return self.require_link_href_with_rel(ext_segment, 'resolve')
+    def _members_url(self, ext_segment):
+        return self.require_link_href_with_rel(ext_segment, 'members')
 
     def _deactivate_user(self, test_username):
         resolve_user_url = '/dataserver2/ResolveUser/%s' % test_username
@@ -498,7 +498,7 @@ class TestResolveSegmentsView(SegmentManagementTest,
         self.testapp.post(deactivate_url)
 
     @WithSharedApplicationMockDS(users=True, testapp=True, default_authenticate=True)
-    def test_export_resolved(self):
+    def test_export_members(self):
         with mock_ds.mock_db_trans():
             create_site('alderaan')
             diff_site_user = self._create_user('diff.site')
@@ -535,9 +535,9 @@ class TestResolveSegmentsView(SegmentManagementTest,
         headers = {'accept': str('text/csv')}
 
         # Call without download-token param works
-        resolve_url = self.require_link_href_with_rel(segment, 'resolve')
-        resolved_users = self.testapp.get(resolve_url, params=params, headers=headers)
-        csv_contents, rows = self.normalize_userinfo_csv(resolved_users.body)
+        members_url = self.require_link_href_with_rel(segment, 'members')
+        members = self.testapp.get(members_url, params=params, headers=headers)
+        csv_contents, rows = self.normalize_userinfo_csv(members.body)
 
         assert_that(rows, has_length(3))
         assert_that(rows[0], is_('username,realname,alias,email,createdTime,lastLoginTime,ext id1'))
@@ -546,20 +546,20 @@ class TestResolveSegmentsView(SegmentManagementTest,
 
         # As does call with empty string
         params['download-token'] = ''
-        resolved_users = self.testapp.get(resolve_url, params, status=200, headers=headers)
-        _, rows = self.normalize_userinfo_csv(resolved_users.body)
+        members = self.testapp.get(members_url, params, status=200, headers=headers)
+        _, rows = self.normalize_userinfo_csv(members.body)
         assert_that(rows, has_length(3))
 
         params['download-token'] = 1234
-        resolved_users = self.testapp.get(resolve_url, params, status=200, headers=headers)
-        _, rows = self.normalize_userinfo_csv(resolved_users.body)
+        members = self.testapp.get(members_url, params, status=200, headers=headers)
+        _, rows = self.normalize_userinfo_csv(members.body)
         assert_that(rows, has_length(3))
-        cookies = dict(parse_cookie(resolved_users.headers['Set-Cookie']))
+        cookies = dict(parse_cookie(members.headers['Set-Cookie']))
         assert_that(cookies, has_item('download-1234'))
         cookie_res = json.loads(cookies['download-1234'])
         assert_that(cookie_res, has_entry('success', True))
 
-        normalized_body, _ = self.normalize_userinfo_csv(resolved_users.body)
+        normalized_body, _ = self.normalize_userinfo_csv(members.body)
         assert_that(normalized_body, is_(csv_contents))
 
     @staticmethod
