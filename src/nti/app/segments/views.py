@@ -61,7 +61,7 @@ from nti.externalization.interfaces import StandardExternalFields
 from nti.segments.interfaces import ISegment
 from nti.segments.interfaces import ISegmentsContainer
 
-from nti.segments.model import ResultSet
+from nti.segments.model import IntIdSet
 
 from nti.site.interfaces import IHostPolicyFolder
 
@@ -194,7 +194,7 @@ class ResolveSegmentView(AbstractEntityViewMixin):
         initial_intids = intids_of_users_by_site(site, filter_deactivated=False)
 
         if self.context.filter_set is not None:
-            rs = ResultSet(initial_intids)
+            rs = IntIdSet(initial_intids)
             initial_intids = self.context.filter_set.resolve(rs).intids()
 
         return initial_intids
