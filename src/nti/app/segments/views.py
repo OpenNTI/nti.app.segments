@@ -148,7 +148,7 @@ class DeleteSegmentView(AbstractAuthenticatedView):
 
 @view_config(route_name='objects.generic.traversal',
              request_method='GET',
-             context=ISegment,
+             context=IUserSegment,
              name=VIEW_MEMBERS,
              accept='application/json',
              permission=ACT_SEARCH)
