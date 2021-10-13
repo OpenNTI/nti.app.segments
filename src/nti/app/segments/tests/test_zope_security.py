@@ -31,6 +31,7 @@ from nti.dataserver.authorization import ACT_CREATE
 from nti.dataserver.authorization import ACT_DELETE
 from nti.dataserver.authorization import ACT_LIST
 from nti.dataserver.authorization import ACT_READ
+from nti.dataserver.authorization import ACT_SEARCH
 from nti.dataserver.authorization import ACT_UPDATE
 from nti.dataserver.authorization import ROLE_ADMIN
 
@@ -76,7 +77,8 @@ class TestSegmentsContainerPermissions(ApplicationLayerTest,
                 self.require_permissions(container)
 
             rpm = IRolePermissionManager(container)
-            for perm in (ACT_CREATE, ACT_READ, ACT_UPDATE, ACT_DELETE, ACT_LIST):
+            for perm in (ACT_CREATE, ACT_READ, ACT_UPDATE, ACT_DELETE,
+                         ACT_LIST, ACT_SEARCH):
                 roles = rpm.getRolesForPermission(perm.id)
                 assert_that(roles, has_length(greater_than(0)))
                 assert_that(roles, has_item((ROLE_ADMIN.id, Allow)))

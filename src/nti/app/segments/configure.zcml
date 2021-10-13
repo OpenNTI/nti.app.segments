@@ -41,7 +41,7 @@
                 for="nti.segments.interfaces.ISegment
                      pyramid.interfaces.IRequest" />
 
-    <subscriber factory=".decorators.DeleteLinkSegmentDecorator"
+    <subscriber factory=".decorators.SegmentLinkDecorator"
                 for="nti.segments.interfaces.ISegment
                      pyramid.interfaces.IRequest"
                 provides="nti.externalization.interfaces.IExternalMappingDecorator"/>

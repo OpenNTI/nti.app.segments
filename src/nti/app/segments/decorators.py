@@ -10,9 +10,12 @@ from zope import interface
 
 from nti.app.renderers.decorators import AbstractAuthenticatedRequestAwareDecorator
 
+from nti.app.segments import VIEW_MEMBERS
+
 from nti.appserver.pyramid_authorization import has_permission
 
 from nti.dataserver.authorization import ACT_DELETE
+from nti.dataserver.authorization import ACT_SEARCH
 
 from nti.externalization.interfaces import IExternalMappingDecorator
 from nti.externalization.interfaces import StandardExternalFields
@@ -28,15 +31,20 @@ LINKS = StandardExternalFields.LINKS
 
 @component.adapter(ISegment, IRequest)
 @interface.implementer(IExternalMappingDecorator)
-class DeleteLinkSegmentDecorator(AbstractAuthenticatedRequestAwareDecorator):
-
-    def _predicate(self, context, result):
-        super_instance = super(DeleteLinkSegmentDecorator, self)
-        return (super_instance._predicate(context, result)
-                and has_permission(ACT_DELETE, context, self.request))
+class SegmentLinkDecorator(AbstractAuthenticatedRequestAwareDecorator):
 
     def _do_decorate_external(self, context, result):
-        links = result.setdefault(LINKS, [])
-        links.append(Link(context,
-                          rel='delete',
-                          method='DELETE'))
+        links = []
+        if has_permission(ACT_DELETE, context, self.request):
+            links.append(Link(context,
+                              rel='delete',
+                              method='DELETE'))
+
+        if has_permission(ACT_SEARCH, context, self.request):
+            links.append(Link(context,
+                              rel='members',
+                              elements=(VIEW_MEMBERS,),
+                              method='GET'))
+
+        if links:
+            result.setdefault(LINKS, []).extend(links)

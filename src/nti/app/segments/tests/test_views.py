@@ -5,20 +5,30 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import json
 import os
 import time
+from itertools import chain
 
 from hamcrest import assert_that
 from hamcrest import contains
 from hamcrest import described_as
 from hamcrest import has_entries
+from hamcrest import has_entry
+from hamcrest import has_item
 from hamcrest import has_length
 from hamcrest import is_
 from hamcrest import is_not
 from hamcrest import none
 from hamcrest import not_none
 
+from webob.cookies import parse_cookie
+
+from zope import lifecycleevent
+
 from nti.app.segments.tests import SiteAdminTestMixin
+
+from nti.app.site.hostpolicy import create_site
 
 from nti.app.testing.application_webtest import ApplicationLayerTest
 
@@ -26,14 +36,21 @@ from nti.app.testing.base import TestBaseMixin
 
 from nti.app.testing.decorators import WithSharedApplicationMockDS
 
+from nti.app.users.utils import set_user_creation_site
+
 from nti.dataserver.authorization import ROLE_ADMIN
 
 from nti.dataserver.tests import mock_dataserver as mock_ds
 
 from nti.dataserver.users.interfaces import IFriendlyNamed
 
+from nti.externalization.datetime import date_from_string
+
+from nti.identifiers.interfaces import IUserExternalIdentityContainer
+
 from nti.ntiids.ntiids import find_object_with_ntiid
 
+from nti.segments.model import IsDeactivatedFilterSet
 from nti.segments.model import UserSegment
 
 
@@ -68,9 +85,8 @@ class WorkspaceTestMixin(TestBaseMixin):
         assert_that(workspace, is_(none()), ws_name)
 
 
-class TestCreateSegments(ApplicationLayerTest,
-                         WorkspaceTestMixin,
-                         SiteAdminTestMixin):
+class SegmentManagementTest(ApplicationLayerTest,
+                            WorkspaceTestMixin):
 
     WORKSPACE_NAME = 'Segments'
 
@@ -78,6 +94,7 @@ class TestCreateSegments(ApplicationLayerTest,
 
     def _create_segment(self,
                         title,
+                        filter_set=None,
                         created_time=None,
                         last_modified=None,
                         **kwargs):
@@ -88,12 +105,13 @@ class TestCreateSegments(ApplicationLayerTest,
                                                     'Segments',
                                                     **workspace_kwargs)
 
-        res = self.testapp.post_json(create_path,
-                                     {
-                                         "MimeType": UserSegment.mime_type,
-                                         "title": title
-                                     },
-                                     **kwargs)
+        data = {
+            "MimeType": UserSegment.mime_type,
+            "title": title,
+            "filter_set": filter_set,
+        }
+
+        res = self.testapp.post_json(create_path, data, **kwargs)
 
         if created_time is not None or last_modified is not None:
             with mock_ds.mock_db_trans():
@@ -106,6 +124,30 @@ class TestCreateSegments(ApplicationLayerTest,
                     segment.lastModified = last_modified
 
         return res
+
+    def _list_segments(self, via_workspace=True, **kwargs):
+        if via_workspace:
+            workspace_kwargs = dict()
+            if 'extra_environ' in kwargs:
+                workspace_kwargs['extra_environ'] = kwargs['extra_environ']
+            list_path = self.get_workspace_collection('SiteAdmin',
+                                                      'Segments',
+                                                      **workspace_kwargs)
+        else:
+            list_path = os.path.join('/dataserver2',
+                                     '++etc++hostsites',
+                                     'alpha.nextthought.com',
+                                     '++etc++site',
+                                     'default',
+                                     'segments-container')
+
+        res = self.testapp.get(list_path, **kwargs)
+
+        return res
+
+
+class TestCreateSegments(SegmentManagementTest,
+                         SiteAdminTestMixin):
 
     @WithSharedApplicationMockDS(users=('site.admin.one',
                                         'site.admin.two',
@@ -187,26 +229,6 @@ class TestCreateSegments(ApplicationLayerTest,
 
         self.testapp.get(delete_url, extra_environ=site_admin_one_env,
                          status=404)
-
-    def _list_segments(self, via_workspace=True, **kwargs):
-        if via_workspace:
-            workspace_kwargs = dict()
-            if 'extra_environ' in kwargs:
-                workspace_kwargs['extra_environ'] = kwargs['extra_environ']
-            list_path = self.get_workspace_collection('SiteAdmin',
-                                                      'Segments',
-                                                      **workspace_kwargs)
-        else:
-            list_path = os.path.join('/dataserver2',
-                                     '++etc++hostsites',
-                                     'alpha.nextthought.com',
-                                     '++etc++site',
-                                     'default',
-                                     'segments-container')
-
-        res = self.testapp.get(list_path, **kwargs)
-
-        return res
 
     @WithSharedApplicationMockDS(users=('site.admin.one',
                                         'site.admin.two',
@@ -332,3 +354,237 @@ class TestCreateSegments(ApplicationLayerTest,
                      (title_one, title_two, title_three))
         assert_order({'sortOn': 'lastmodified'},
                      (title_two, title_three, title_one))
+
+
+class TestSegmentMembersView(SegmentManagementTest,
+                             SiteAdminTestMixin):
+
+    def _segment_members(self, href, **kwargs):
+        res = self.testapp.get(href, **kwargs)
+
+        return res.json_body
+
+    @WithSharedApplicationMockDS(users=('site.admin.one',
+                                        'site.admin.two',
+                                        'non.admin',
+                                        'diff.site.admin'),
+                                 testapp=True,
+                                 default_authenticate=True)
+    def test_access(self):
+        site_admin_one_env = self._make_extra_environ(username='site.admin.one')
+        site_admin_two_env = self._make_extra_environ(username='site.admin.two')
+        non_admin_env = self._make_extra_environ(username='non.admin')
+
+        # User with a different site
+        diff_site_admin_env = self._make_extra_environ(
+            username='diff.site.admin',
+            HTTP_ORIGIN='http://alderaan')
+
+        with mock_ds.mock_db_trans():
+            create_site('alderaan')
+
+        with mock_ds.mock_db_trans(site_name='alderaan'):
+            self.make_site_admins('diff.site.admin',)
+
+        with mock_ds.mock_db_trans(site_name='alpha.nextthought.com'):
+            self.make_site_admins('site.admin.one', 'site.admin.two')
+
+            non_admin = self._get_user('non.admin')
+            set_user_creation_site(non_admin)
+            lifecycleevent.modified(non_admin)
+
+        # Only admins and site admins should have access
+        segment = self._create_segment('Null Filter',
+                                       extra_environ=site_admin_one_env).json_body
+
+        members_url = self.require_link_href_with_rel(segment, 'members')
+        self.testapp.get(members_url)
+        self.testapp.get(members_url, extra_environ=site_admin_one_env)
+        self.testapp.get(members_url, extra_environ=site_admin_two_env)
+
+        self.testapp.get(members_url, extra_environ=non_admin_env, status=403)
+        self.testapp.get(members_url, extra_environ=diff_site_admin_env, status=403)
+
+    @WithSharedApplicationMockDS(users=('site.admin.one',
+                                        'site.admin.two',
+                                        'non.admin',
+                                        'diff.site'),
+                                 testapp=True,
+                                 default_authenticate=True)
+    def test_no_filter(self):
+        with mock_ds.mock_db_trans():
+            create_site('alderaan')
+            diff_site_user = self._get_user('diff.site')
+            set_user_creation_site(diff_site_user, 'alderaan')
+            lifecycleevent.modified(diff_site_user)
+
+        with mock_ds.mock_db_trans(site_name='alpha.nextthought.com'):
+            self.make_site_admins('site.admin.one', 'site.admin.two')
+
+            non_admin = self._get_user('non.admin')
+            set_user_creation_site(non_admin)
+            lifecycleevent.modified(non_admin)
+
+        res = self._create_segment('Null Filter',
+                                   status=201).json_body
+
+        members_url = self._members_url(res)
+        res = self._segment_members(members_url,
+                                    params={'sortOn': 'displayname'})
+        assert_that(res['Items'], has_length(3))
+        usernames = [user['Username'] for user in res['Items']]
+        assert_that(usernames, contains(
+            'non.admin',
+            'site.admin.one',
+            'site.admin.two',
+        ))
+
+    @WithSharedApplicationMockDS(users=True,
+                                 testapp=True,
+                                 default_authenticate=True)
+    def test_is_deactivated(self):
+        test_username = 'deactivated.user.three'
+        with mock_ds.mock_db_trans(site_name='alpha.nextthought.com'):
+            self._create_user('user.one',
+                              external_value={'realname': u'user one'})
+            self._create_user('user.two',
+                              external_value={'realname': u'user two'})
+            self._create_user(test_username,
+                              external_value={'realname': u'user three'})
+
+        deactivated_filter_set = {
+            "MimeType": IsDeactivatedFilterSet.mime_type,
+            "Deactivated": True
+        }
+        deactivated_seg = self._create_segment('Deactivated Users',
+                                   filter_set=deactivated_filter_set).json_body
+
+        activated_filter_set = {
+            "MimeType": IsDeactivatedFilterSet.mime_type,
+            "Deactivated": False
+        }
+        activated_seg = self._create_segment('Activated Users',
+                                             filter_set=activated_filter_set).json_body
+
+        # Matches prior to deactivation
+        deactivated_members_url = self._members_url(deactivated_seg)
+        deactivated_res = self._segment_members(deactivated_members_url)
+        assert_that(deactivated_res['Items'], has_length(0))
+
+        activated_members_url = self._members_url(activated_seg)
+        activated_res = self._segment_members(activated_members_url)
+        assert_that(activated_res['Items'], has_length(3))
+
+        # Deactivate user
+        self._deactivate_user(test_username)
+
+        # Matches post deactivation
+        deactivated_res = self._segment_members(deactivated_members_url)
+        assert_that(deactivated_res['Items'], has_length(1))
+        assert_that(deactivated_res['Items'][0], has_entries(Username=test_username))
+
+        activated_res = self._segment_members(activated_members_url)
+        assert_that(activated_res['Items'], has_length(2))
+
+    def _members_url(self, ext_segment):
+        return self.require_link_href_with_rel(ext_segment, 'members')
+
+    def _deactivate_user(self, test_username):
+        resolve_user_url = '/dataserver2/ResolveUser/%s' % test_username
+        res = self.testapp.get(resolve_user_url).json_body
+        assert_that(res['Items'], has_length(1))
+
+        deactivate_url = self.require_link_href_with_rel(res['Items'][0], 'Deactivate')
+        self.testapp.post(deactivate_url)
+
+    @WithSharedApplicationMockDS(users=True, testapp=True, default_authenticate=True)
+    def test_export_members(self):
+        with mock_ds.mock_db_trans():
+            create_site('alderaan')
+            diff_site_user = self._create_user('diff.site')
+            set_user_creation_site(diff_site_user, 'alderaan')
+            lifecycleevent.modified(diff_site_user)
+
+        with mock_ds.mock_db_trans(site_name='alpha.nextthought.com'):
+            user = self._create_user('user.one',
+                                     external_value={'realname': u'user one',
+                                                     'email': u'one@user.org'})
+            self._create_user('user.two',
+                              external_value={'realname': u'user two',
+                                              'email': u'two@user.org'})
+            self._create_user('user.three.deactivated',
+                              external_value={'realname': u'user three',
+                                              'email': u'three@user.org'})
+
+            identity_container = IUserExternalIdentityContainer(user)
+            identity_container.add_external_mapping('ext id1', 'aaaaaaa')
+            lifecycleevent.modified(user)
+
+        activated_filter_set = {
+            "MimeType": IsDeactivatedFilterSet.mime_type,
+            "Deactivated": False
+        }
+        segment = self._create_segment('Activated Users',
+                                       filter_set=activated_filter_set).json_body
+
+        # Deactivate user
+        self._deactivate_user('user.three.deactivated')
+
+        # CSV
+        params = {'sortOn': 'createdTime'}
+        headers = {'accept': str('text/csv')}
+
+        # Call without download-token param works
+        members_url = self.require_link_href_with_rel(segment, 'members')
+        members = self.testapp.get(members_url, params=params, headers=headers)
+        csv_contents, rows = self.normalize_userinfo_csv(members.body)
+
+        assert_that(rows, has_length(3))
+        assert_that(rows[0], is_('username,realname,alias,email,createdTime,lastLoginTime,ext id1'))
+        assert_that(rows[1], is_('user.one,User One,User One,one@user.org,,,aaaaaaa'))
+        assert_that(rows[2], is_('user.two,User Two,User Two,two@user.org,,,'))
+
+        # As does call with empty string
+        params['download-token'] = ''
+        members = self.testapp.get(members_url, params, status=200, headers=headers)
+        _, rows = self.normalize_userinfo_csv(members.body)
+        assert_that(rows, has_length(3))
+
+        params['download-token'] = 1234
+        members = self.testapp.get(members_url, params, status=200, headers=headers)
+        _, rows = self.normalize_userinfo_csv(members.body)
+        assert_that(rows, has_length(3))
+        cookies = dict(parse_cookie(members.headers['Set-Cookie']))
+        assert_that(cookies, has_item('download-1234'))
+        cookie_res = json.loads(cookies['download-1234'])
+        assert_that(cookie_res, has_entry('success', True))
+
+        normalized_body, _ = self.normalize_userinfo_csv(members.body)
+        assert_that(normalized_body, is_(csv_contents))
+
+    @staticmethod
+    def normalize_userinfo_csv(csv_contents):
+        """
+        Removes any trailing rows and, after checking for a parseable created
+        time in the fifth column, sets that column as empty
+        """
+        # Removing any trailing empty rows and split into rows
+        rows = csv_contents.rstrip().split('\r\n')
+
+        def normalize_row(row):
+            cols = row.split(',')
+            assert_that(cols, has_length(7), "Expected 7 columns: %s" % (row,))
+
+            # Ensure it parses as a date
+            date_from_string(cols[4])
+            cols[4] = ''
+
+            return ','.join(cols)
+
+        # We only want to normalize the data rows (not the header)
+        header = rows[:1]
+        data = [normalize_row(r) for r in rows[1:]]
+        rows = tuple(chain(header, data))
+        csv_contents = '\r\n'.join(rows)
+
+        return csv_contents, rows
