@@ -8,6 +8,7 @@ from __future__ import print_function
 from operator import attrgetter
 
 from pyramid import httpexceptions as hexc
+
 from pyramid.view import view_config
 
 from zc.displayname.interfaces import IDisplayNameGenerator
@@ -58,8 +59,11 @@ from nti.dataserver.users.utils import intids_of_users_by_site
 from nti.externalization.interfaces import LocatedExternalDict
 from nti.externalization.interfaces import StandardExternalFields
 
+from nti.namedfile.file import safe_filename
+
 from nti.segments.interfaces import ISegment
 from nti.segments.interfaces import ISegmentsContainer
+from nti.segments.interfaces import IUserSegment
 
 from nti.segments.model import IntIdSet
 
@@ -144,11 +148,11 @@ class DeleteSegmentView(AbstractAuthenticatedView):
 
 @view_config(route_name='objects.generic.traversal',
              request_method='GET',
-             context=ISegment,
+             context=IUserSegment,
              name=VIEW_MEMBERS,
              accept='application/json',
              permission=ACT_SEARCH)
-class ResolveSegmentView(AbstractEntityViewMixin):
+class SegmentMembersView(AbstractEntityViewMixin):
 
     # TODO: Consider extracting sorting/externalization logic to a mixin,
     #  e.g. `nti.app.users.view_mixins.ListUsersMixin`
@@ -209,16 +213,16 @@ class ResolveSegmentView(AbstractEntityViewMixin):
 
 @view_config(route_name='objects.generic.traversal',
              request_method='GET',
-             context=ISegment,
+             context=IUserSegment,
              accept='text/csv',
              name=VIEW_MEMBERS,
              decorator=download_cookie_decorator,
              permission=ACT_SEARCH)
-class ResolveSegmentCSVView(ResolveSegmentView,
+class SegmentMembersCSVView(SegmentMembersView,
                             UsersCSVExportMixin):
 
     def _get_filename(self):
-        return u'users_export-{safer_segment_name}.csv'
+        return safe_filename(u'users_export-%s.csv' % (self.context.title,))
 
     def __call__(self):
         self.check_access()
