@@ -18,6 +18,8 @@ from zope import interface
 
 from zope.cachedescriptors.property import Lazy
 
+from zope.intid import IIntIds
+
 from nti.app.base.abstract_views import AbstractAuthenticatedView
 from nti.app.base.abstract_views import download_cookie_decorator
 
@@ -30,10 +32,14 @@ from nti.app.segments import VIEW_MEMBERS
 
 from nti.app.segments.interfaces import ISegmentsCollection
 
+from nti.app.users.utils import get_site_admins
+
 from nti.app.users.views.view_mixins import AbstractEntityViewMixin
 from nti.app.users.views.view_mixins import UsersCSVExportMixin
 
 from nti.appserver.ugd_edit_views import UGDPutView
+
+from nti.common.string import is_true
 
 from nti.coremetadata.interfaces import IX_ALIAS
 from nti.coremetadata.interfaces import IX_DISPLAYNAME
@@ -164,6 +170,23 @@ class SegmentMembersView(AbstractEntityViewMixin):
         # We're using a permission check on the context of the view
         pass
 
+    @Lazy
+    def filterAdmins(self):
+        # pylint: disable=no-member
+        return is_true(self.params.get('filterAdmins', 'False'))
+
+    @Lazy
+    def site_admin_intids(self):
+        """
+        Return a set of site admin intids.
+        """
+        intids = component.getUtility(IIntIds)
+        all_site_admins = get_site_admins()
+        result = set()
+        for user in all_site_admins:
+            result.add(intids.getId(user))
+        return result
+
     def get_externalizer(self, user):
         # pylint: disable=no-member
         result = 'summary'
@@ -187,8 +210,12 @@ class SegmentMembersView(AbstractEntityViewMixin):
         }
 
     def search_include(self, doc_id):
-        # Users only
-        return self.mime_type(doc_id) == 'application/vnd.nextthought.user'
+        # Users only and filter site admins if requested
+        result = self.mime_type(doc_id) == 'application/vnd.nextthought.user' \
+                 and super(SegmentMembersView, self).search_include(doc_id)
+        if result and self.filterAdmins:
+            result = doc_id not in self.site_admin_intids
+        return result
 
     @Lazy
     def site_name(self):
