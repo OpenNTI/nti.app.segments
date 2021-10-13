@@ -152,7 +152,7 @@ class DeleteSegmentView(AbstractAuthenticatedView):
              name=VIEW_MEMBERS,
              accept='application/json',
              permission=ACT_SEARCH)
-class ResolveSegmentView(AbstractEntityViewMixin):
+class SegmentMembersView(AbstractEntityViewMixin):
 
     # TODO: Consider extracting sorting/externalization logic to a mixin,
     #  e.g. `nti.app.users.view_mixins.ListUsersMixin`
@@ -218,7 +218,7 @@ class ResolveSegmentView(AbstractEntityViewMixin):
              name=VIEW_MEMBERS,
              decorator=download_cookie_decorator,
              permission=ACT_SEARCH)
-class ResolveSegmentCSVView(ResolveSegmentView,
+class SegmentMembersCSVView(SegmentMembersView,
                             UsersCSVExportMixin):
 
     def _get_filename(self):
