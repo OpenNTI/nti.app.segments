@@ -150,6 +150,8 @@ class DeleteSegmentView(AbstractAuthenticatedView):
              permission=ACT_SEARCH)
 class ResolveSegmentView(AbstractEntityViewMixin):
 
+    # TODO: Consider extracting sorting/externalization logic to a mixin,
+    #  e.g. `nti.app.users.view_mixins.ListUsersMixin`
     _ALLOWED_SORTING = AbstractEntityViewMixin._ALLOWED_SORTING + (IX_LASTSEEN_TIME,)
 
     _NUMERIC_SORTING = AbstractEntityViewMixin._NUMERIC_SORTING + (IX_LASTSEEN_TIME,)
