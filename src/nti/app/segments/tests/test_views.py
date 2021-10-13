@@ -515,6 +515,10 @@ class TestSegmentMembersView(SegmentManagementTest,
             self._create_user('user.three.deactivated',
                               external_value={'realname': u'user three',
                                               'email': u'three@user.org'})
+            self._create_user('site.admin',
+                              external_value={'realname': u'admin one',
+                                              'email': u'site.admin@user.org'})
+            self.make_site_admins('site.admin')
 
             identity_container = IUserExternalIdentityContainer(user)
             identity_container.add_external_mapping('ext id1', 'aaaaaaa')
@@ -540,12 +544,26 @@ class TestSegmentMembersView(SegmentManagementTest,
         assert_that(members.content_disposition,
                     is_('attachment; filename="users_export-Activated_Users.csv"'))
 
-        csv_contents, rows = self.normalize_userinfo_csv(members.body)
+        _, rows = self.normalize_userinfo_csv(members.body)
 
-        assert_that(rows, has_length(3))
+        assert_that(rows, has_length(4))
         assert_that(rows[0], is_('username,realname,alias,email,createdTime,lastLoginTime,ext id1'))
         assert_that(rows[1], is_('user.one,User One,User One,one@user.org,,,aaaaaaa'))
         assert_that(rows[2], is_('user.two,User Two,User Two,two@user.org,,,'))
+        assert_that(rows[3], is_('site.admin,Admin One,Admin One,site.admin@user.org,,,'))
+
+        # Check filtering
+        params['filterAdmins'] = True
+        members = self.testapp.get(members_url, params=params, headers=headers)
+        csv_contents, rows = self.normalize_userinfo_csv(members.body)
+        assert_that(rows, has_length(3))
+
+        params['filter'] = "One"
+        members = self.testapp.get(members_url, params=params, headers=headers)
+        _, rows = self.normalize_userinfo_csv(members.body)
+        assert_that(rows, has_length(2))
+        assert_that(rows[1], is_('user.one,User One,User One,one@user.org,,,aaaaaaa'))
+        del params['filter']
 
         # As does call with empty string
         params['download-token'] = ''
