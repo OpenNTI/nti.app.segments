@@ -8,6 +8,7 @@ from __future__ import print_function
 from operator import attrgetter
 
 from pyramid import httpexceptions as hexc
+
 from pyramid.view import view_config
 
 from zc.displayname.interfaces import IDisplayNameGenerator
@@ -58,8 +59,11 @@ from nti.dataserver.users.utils import intids_of_users_by_site
 from nti.externalization.interfaces import LocatedExternalDict
 from nti.externalization.interfaces import StandardExternalFields
 
+from nti.namedfile.file import safe_filename
+
 from nti.segments.interfaces import ISegment
 from nti.segments.interfaces import ISegmentsContainer
+from nti.segments.interfaces import IUserSegment
 
 from nti.segments.model import IntIdSet
 
@@ -209,7 +213,7 @@ class ResolveSegmentView(AbstractEntityViewMixin):
 
 @view_config(route_name='objects.generic.traversal',
              request_method='GET',
-             context=ISegment,
+             context=IUserSegment,
              accept='text/csv',
              name=VIEW_MEMBERS,
              decorator=download_cookie_decorator,
@@ -218,7 +222,7 @@ class ResolveSegmentCSVView(ResolveSegmentView,
                             UsersCSVExportMixin):
 
     def _get_filename(self):
-        return u'users_export-{safer_segment_name}.csv'
+        return safe_filename(u'users_export-%s.csv' % (self.context.title,))
 
     def __call__(self):
         self.check_access()

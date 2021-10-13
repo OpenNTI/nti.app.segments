@@ -537,6 +537,9 @@ class TestSegmentMembersView(SegmentManagementTest,
         # Call without download-token param works
         members_url = self.require_link_href_with_rel(segment, 'members')
         members = self.testapp.get(members_url, params=params, headers=headers)
+        assert_that(members.content_disposition,
+                    is_('attachment; filename="users_export-Activated_Users.csv"'))
+
         csv_contents, rows = self.normalize_userinfo_csv(members.body)
 
         assert_that(rows, has_length(3))
