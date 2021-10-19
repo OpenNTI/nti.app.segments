@@ -8,14 +8,48 @@ from __future__ import print_function
 from zope import lifecycleevent
 
 from zope.component.hooks import getSite
+from zope.component.hooks import setHooks
 
 from zope.securitypolicy.interfaces import IPrincipalRoleManager
+
+from zope.testing import cleanup as z_cleanup
 
 from nti.app.users.utils import set_user_creation_site
 
 from nti.coremetadata.interfaces import IUser
 
 from nti.dataserver.authorization import ROLE_SITE_ADMIN
+
+from nti.testing.layers import ConfiguringLayerMixin
+
+from nti.testing.layers import GCLayerMixin
+
+from nti.testing.layers import ZopeComponentLayer
+
+
+class SharedConfiguringTestLayer(ZopeComponentLayer,
+                                 GCLayerMixin,
+                                 ConfiguringLayerMixin):
+
+    set_up_packages = ('nti.dataserver', 'nti.app.segments')
+
+    @classmethod
+    def setUp(cls):
+        setHooks()
+        cls.setUpPackages()
+
+    @classmethod
+    def tearDown(cls):
+        cls.tearDownPackages()
+        z_cleanup.cleanUp()
+
+    @classmethod
+    def testSetUp(cls, unused_test=None):
+        setHooks()
+
+    @classmethod
+    def testTearDown(cls):
+        pass
 
 
 class SiteAdminTestMixin(object):
