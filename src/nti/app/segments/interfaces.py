@@ -14,6 +14,7 @@ from zope.schema import vocabulary
 
 from nti.app.site.workspaces.interfaces import ISiteAdminCollection
 
+from nti.schema.field import ListOrTuple
 from nti.schema.field import Number
 from nti.schema.field import Object
 from nti.schema.field import Timedelta
@@ -40,13 +41,14 @@ class ISegmentsCollection(ISiteAdminCollection):
 
 class ITimeRange(Interface):
 
-    start = Number(title=u'Start',
-                   description=u'Beginning of the range.',
-                   required=False)
-
-    end = Number(title=u'End',
-                 description=u'End of the range.',
-                 required=False)
+    range_tuple = ListOrTuple(title=u'Range Tuple',
+                              description=u'Tuple including the start and end of '
+                                          u'the range, expressed as epoch times.',
+                              value_type=Number(title=u'Start or end time.',
+                                                required=False),
+                              min_length=2,
+                              max_length=2,
+                              required=True)
 
 
 class IRelativeOffset(ITimeRange):

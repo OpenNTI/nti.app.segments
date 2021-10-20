@@ -19,7 +19,6 @@ from zope.container.contained import Contained
 from nti.app.segments.interfaces import ILastActiveFilterSet
 from nti.app.segments.interfaces import IRelativeOffset
 from nti.app.segments.interfaces import RANGE_OP_AFTER
-from nti.app.segments.interfaces import RANGE_OP_BEFORE
 
 from nti.coremetadata.interfaces import IX_LASTSEEN
 
@@ -47,18 +46,15 @@ class RelativeOffset(SchemaConfigured,
         SchemaConfigured.__init__(self, **kwargs)
 
     @property
-    def start(self):
+    def range_tuple(self):
+        if self.duration is None:
+            return None, None
+
+        offset_time = time.time() + self.duration.total_seconds()
         if self.operator == RANGE_OP_AFTER:
-            return time.time() + self.duration.total_seconds()
+            return offset_time, None
 
-        return None
-
-    @property
-    def end(self):
-        if self.operator == RANGE_OP_BEFORE:
-            return time.time() + self.duration.total_seconds()
-
-        return None
+        return None, offset_time
 
 
 @interface.implementer(ILastActiveFilterSet)
@@ -83,5 +79,5 @@ class LastActiveFilterSet(SchemaConfigured,
         return self.catalog.apply(query)
 
     def apply(self, initial_set):
-        return initial_set.intersection(self.included_intids(self.period.start,
-                                                             self.period.end))
+        start, end = self.period.range_tuple
+        return initial_set.intersection(self.included_intids(start, end))
