@@ -57,8 +57,8 @@ class IRelativeOffset(ITimeRange):
     the past.
     """
 
-    duration = Timedelta(title=u"The length of the course",
-                         description=u"Currently optional, may be None",
+    duration = Timedelta(title=u"Duration",
+                         description=u"Offset from present time.",
                          required=True)
 
     operator = ValidChoice(title=u'Operator',
