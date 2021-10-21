@@ -17,3 +17,6 @@ SEGMENTS = u'Segments'
 
 #: View name for returning segment membership
 VIEW_MEMBERS = u'members'
+
+#: View name for previewing membership after segment changes
+VIEW_MEMBERS_PREVIEW = u'members_preview'
