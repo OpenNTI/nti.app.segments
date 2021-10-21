@@ -11,8 +11,10 @@ from unittest import TestCase
 
 from hamcrest import assert_that
 from hamcrest import has_entries
+from hamcrest import has_key
 from hamcrest import has_properties
 from hamcrest import is_
+from hamcrest import not_
 from hamcrest import not_none
 
 from nti.app.segments.interfaces import ILastActiveFilterSet
@@ -23,6 +25,7 @@ from nti.app.segments.model import LastActiveFilterSet
 from nti.app.segments.model import RelativeOffset
 
 from nti.app.segments.tests import SharedConfiguringTestLayer
+from nti.externalization import to_external_object
 
 from nti.externalization import update_from_external_object
 
@@ -57,7 +60,9 @@ class TestLastActiveFilterSet(TestCase):
             "period": {
                 "MimeType": RelativeOffset.mime_type,
                 "duration": "P20D",
-                "operator": RANGE_OP_BEFORE
+                "operator": RANGE_OP_BEFORE,
+                # This should just get ignored
+                "range_tuple": [0, 1]
             }
         }
         filter_set = self._internalize(ext_obj)
@@ -72,12 +77,16 @@ class TestLastActiveFilterSet(TestCase):
         offset = RelativeOffset(duration=timedelta(days=30),
                                 operator=RANGE_OP_AFTER)
         filter_set = LastActiveFilterSet(period=offset)
-        assert_that(filter_set,
-                    externalizes(has_entries({
+
+        ext_filterset = to_external_object(filter_set)
+        assert_that(ext_filterset,
+                    has_entries({
                         'MimeType': LastActiveFilterSet.mime_type,
                         "period": has_entries({
                             "MimeType": RelativeOffset.mime_type,
                             "duration": "P30D",
                             "operator": RANGE_OP_AFTER,
                         })
-                    })))
+                    }))
+
+        assert_that(ext_filterset['period'], not_(has_key('range_tuple')))

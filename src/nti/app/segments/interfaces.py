@@ -49,6 +49,7 @@ class ITimeRange(Interface):
                               min_length=2,
                               max_length=2,
                               required=True)
+    range_tuple.setTaggedValue('_ext_excluded_out', True)
 
 
 class IRelativeOffset(ITimeRange):

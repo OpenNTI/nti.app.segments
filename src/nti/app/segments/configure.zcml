@@ -47,6 +47,11 @@
                      pyramid.interfaces.IRequest"
                 provides="nti.externalization.interfaces.IExternalMappingDecorator"/>
 
+    <!-- Externalization -->
+    <adapter factory=".internalization.TimeRangeUpdater"
+             for=".interfaces.ITimeRange"
+             provides="nti.externalization.interfaces.IInternalObjectUpdater" />
+
     <include package="nti.externalization" file="meta.zcml"/>
     <include package="nti.externalization"/>
 
