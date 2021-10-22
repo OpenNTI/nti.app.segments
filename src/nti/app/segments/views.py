@@ -7,6 +7,8 @@ from __future__ import print_function
 
 from operator import attrgetter
 
+import transaction
+
 from pyramid import httpexceptions as hexc
 
 from pyramid.view import view_config
@@ -29,6 +31,7 @@ from nti.app.externalization.view_mixins import ModeledContentUploadRequestUtils
 from nti.app.renderers.interfaces import IUncacheableInResponse
 
 from nti.app.segments import VIEW_MEMBERS
+from nti.app.segments import VIEW_MEMBERS_PREVIEW
 
 from nti.app.segments.interfaces import ISegmentsCollection
 
@@ -236,6 +239,24 @@ class SegmentMembersView(AbstractEntityViewMixin):
         result = self._do_call()
         interface.alsoProvides(result, IUncacheableInResponse)
         return result
+
+
+@view_config(route_name='objects.generic.traversal',
+             request_method='PUT',
+             context=IUserSegment,
+             name=VIEW_MEMBERS_PREVIEW,
+             accept='application/json',
+             permission=ACT_SEARCH)
+class PreviewSegmentMembersView(SegmentMembersView,
+                                UGDPutView):
+
+    def __call__(self):
+        try:
+            UGDPutView.__call__(self)
+            return super(PreviewSegmentMembersView, self).__call__()
+        finally:
+            # Essentially a preflight, so abandon changes
+            transaction.doom()
 
 
 @view_config(route_name='objects.generic.traversal',

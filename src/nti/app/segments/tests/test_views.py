@@ -5,6 +5,7 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import copy
 import json
 import os
 import time
@@ -31,6 +32,7 @@ from nti.app.segments.tests import SiteAdminTestMixin
 from nti.app.site.hostpolicy import create_site
 
 from nti.app.testing.application_webtest import ApplicationLayerTest
+from nti.app.testing.application_webtest import AppTestBaseMixin
 
 from nti.app.testing.base import TestBaseMixin
 
@@ -87,12 +89,8 @@ class WorkspaceTestMixin(TestBaseMixin):
         assert_that(workspace, is_(none()), ws_name)
 
 
-class SegmentManagementTest(ApplicationLayerTest,
-                            WorkspaceTestMixin):
-
-    WORKSPACE_NAME = 'Segments'
-
-    default_origin = 'http://alpha.nextthought.com'
+class SegmentManagementMixin(AppTestBaseMixin,
+                             WorkspaceTestMixin):
 
     def _create_segment(self,
                         title,
@@ -156,6 +154,15 @@ class SegmentManagementTest(ApplicationLayerTest,
         res = self.testapp.get(list_path, **kwargs)
 
         return res
+
+
+class SegmentManagementTest(SegmentManagementMixin,
+                            ApplicationLayerTest,
+                            WorkspaceTestMixin):
+
+    WORKSPACE_NAME = 'Segments'
+
+    default_origin = 'http://alpha.nextthought.com'
 
 
 class TestCreateSegments(SegmentManagementTest,
@@ -368,13 +375,11 @@ class TestCreateSegments(SegmentManagementTest,
                      (title_two, title_three, title_one))
 
 
-class TestSegmentMembersView(SegmentManagementTest,
-                             SiteAdminTestMixin):
+class SegmentMembersViewMixin(SegmentManagementMixin,
+                              SiteAdminTestMixin):
 
     def _segment_members(self, href, **kwargs):
-        res = self.testapp.get(href, **kwargs)
-
-        return res.json_body
+        return self.testapp.get(href, **kwargs)
 
     @WithSharedApplicationMockDS(users=('site.admin.one',
                                         'site.admin.two',
@@ -409,13 +414,13 @@ class TestSegmentMembersView(SegmentManagementTest,
         segment = self._create_segment('Null Filter',
                                        extra_environ=site_admin_one_env).json_body
 
-        members_url = self.require_link_href_with_rel(segment, 'members')
-        self.testapp.get(members_url)
-        self.testapp.get(members_url, extra_environ=site_admin_one_env)
-        self.testapp.get(members_url, extra_environ=site_admin_two_env)
+        members_url = self._members_url(segment)
+        self._segment_members(members_url)
+        self._segment_members(members_url, extra_environ=site_admin_one_env)
+        self._segment_members(members_url, extra_environ=site_admin_two_env)
 
-        self.testapp.get(members_url, extra_environ=non_admin_env, status=403)
-        self.testapp.get(members_url, extra_environ=diff_site_admin_env, status=403)
+        self._segment_members(members_url, extra_environ=non_admin_env, status=403)
+        self._segment_members(members_url, extra_environ=diff_site_admin_env, status=403)
 
     @WithSharedApplicationMockDS(users=('site.admin.one',
                                         'site.admin.two',
@@ -440,9 +445,8 @@ class TestSegmentMembersView(SegmentManagementTest,
         res = self._create_segment('Null Filter',
                                    status=201).json_body
 
-        members_url = self._members_url(res)
-        res = self._segment_members(members_url,
-                                    params={'sortOn': 'displayname'})
+        members_url = '%s?sortOn=displayname' % (self._members_url(res),)
+        res = self._segment_members(members_url).json_body
         assert_that(res['Items'], has_length(3))
         usernames = [user['Username'] for user in res['Items']]
         assert_that(usernames, contains(
@@ -482,22 +486,22 @@ class TestSegmentMembersView(SegmentManagementTest,
 
         # Matches prior to deactivation
         deactivated_members_url = self._members_url(deactivated_seg)
-        deactivated_res = self._segment_members(deactivated_members_url)
+        deactivated_res = self._segment_members(deactivated_members_url).json_body
         assert_that(deactivated_res['Items'], has_length(0))
 
         activated_members_url = self._members_url(activated_seg)
-        activated_res = self._segment_members(activated_members_url)
+        activated_res = self._segment_members(activated_members_url).json_body
         assert_that(activated_res['Items'], has_length(3))
 
         # Deactivate user
         self._deactivate_user(test_username)
 
         # Matches post deactivation
-        deactivated_res = self._segment_members(deactivated_members_url)
+        deactivated_res = self._segment_members(deactivated_members_url).json_body
         assert_that(deactivated_res['Items'], has_length(1))
         assert_that(deactivated_res['Items'][0], has_entries(Username=test_username))
 
-        activated_res = self._segment_members(activated_members_url)
+        activated_res = self._segment_members(activated_members_url).json_body
         assert_that(activated_res['Items'], has_length(2))
 
     def _members_url(self, ext_segment):
@@ -510,6 +514,9 @@ class TestSegmentMembersView(SegmentManagementTest,
 
         deactivate_url = self.require_link_href_with_rel(res['Items'][0], 'Deactivate')
         self.testapp.post(deactivate_url)
+
+
+class TestSegmentMembersView(SegmentManagementTest, SegmentMembersViewMixin):
 
     @WithSharedApplicationMockDS(users=True, testapp=True, default_authenticate=True)
     def test_export_members(self):
@@ -624,3 +631,57 @@ class TestSegmentMembersView(SegmentManagementTest,
         csv_contents = '\r\n'.join(rows)
 
         return csv_contents, rows
+
+
+class TestSegmentMembersPreviewView(SegmentManagementTest,
+                                    SegmentMembersViewMixin):
+
+    def _segment_members(self, href, params=None, **kwargs):
+        params = params if params is not None else {}
+        return self.testapp.put_json(href, params=params, **kwargs)
+
+    def _members_url(self, ext_segment):
+        return self.require_link_href_with_rel(ext_segment, 'members_preview')
+
+    @WithSharedApplicationMockDS(users=True, testapp=True, default_authenticate=True)
+    def test_updated_preview(self):
+        test_username = 'deactivated.user.three'
+        with mock_ds.mock_db_trans(site_name='alpha.nextthought.com'):
+            self._create_user('user.one',
+                              external_value={'realname': u'user one'})
+            self._create_user('user.two',
+                              external_value={'realname': u'user two'})
+            self._create_user(test_username,
+                              external_value={'realname': u'user three'})
+
+        deactivated_filter_set = {
+            "MimeType": IsDeactivatedFilterSet.mime_type,
+            "Deactivated": True
+        }
+        deactivated_seg = self._create_segment(
+            'Deactivated Users',
+            simple_filter_set=deactivated_filter_set).json_body
+
+        # Matches prior to deactivation
+        preview_url = self._members_url(deactivated_seg)
+        deactivated_res = self._segment_members(preview_url).json_body
+        assert_that(deactivated_res['Items'], has_length(0))
+
+        # Deactivate user
+        self._deactivate_user(test_username)
+
+        # Matches post deactivation
+        deactivated_res = self._segment_members(preview_url).json_body
+        assert_that(deactivated_res['Items'], has_length(1))
+        assert_that(deactivated_res['Items'][0], has_entries(Username=test_username))
+
+        # Preview with deactivated changed
+        updated_filter_set = copy.deepcopy(deactivated_seg)
+        updated_filter_set['filter_set']['filter_sets'][0]['filter_sets'][0]['Deactivated'] = False
+        activated_res = self._segment_members(preview_url, params=updated_filter_set).json_body
+        assert_that(activated_res['Items'], has_length(2))
+
+        # Ensure change wasn't persisted
+        activated_res = self._segment_members(preview_url, params=None).json_body
+        assert_that(activated_res['Items'], has_length(1))
+        assert_that(deactivated_res['Items'][0], has_entries(Username=test_username))

@@ -11,6 +11,7 @@ from zope import interface
 from nti.app.renderers.decorators import AbstractAuthenticatedRequestAwareDecorator
 
 from nti.app.segments import VIEW_MEMBERS
+from nti.app.segments import VIEW_MEMBERS_PREVIEW
 
 from nti.appserver.pyramid_authorization import has_permission
 
@@ -45,6 +46,11 @@ class SegmentLinkDecorator(AbstractAuthenticatedRequestAwareDecorator):
                               rel='members',
                               elements=(VIEW_MEMBERS,),
                               method='GET'))
+
+            links.append(Link(context,
+                              rel='members_preview',
+                              elements=(VIEW_MEMBERS_PREVIEW,),
+                              method='PUT'))
 
         if links:
             result.setdefault(LINKS, []).extend(links)
