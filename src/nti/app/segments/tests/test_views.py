@@ -50,7 +50,9 @@ from nti.identifiers.interfaces import IUserExternalIdentityContainer
 
 from nti.ntiids.ntiids import find_object_with_ntiid
 
+from nti.segments.model import IntersectionUserFilterSet
 from nti.segments.model import IsDeactivatedFilterSet
+from nti.segments.model import UnionUserFilterSet
 from nti.segments.model import UserSegment
 
 
@@ -95,6 +97,7 @@ class SegmentManagementTest(ApplicationLayerTest,
     def _create_segment(self,
                         title,
                         filter_set=None,
+                        simple_filter_set=None,
                         created_time=None,
                         last_modified=None,
                         **kwargs):
@@ -104,6 +107,15 @@ class SegmentManagementTest(ApplicationLayerTest,
         create_path = self.get_workspace_collection('SiteAdmin',
                                                     'Segments',
                                                     **workspace_kwargs)
+
+        if simple_filter_set is not None and not filter_set:
+            filter_set = {
+                "MimeType": IntersectionUserFilterSet.mime_type,
+                "filter_sets": [{
+                    "MimeType": UnionUserFilterSet.mime_type,
+                    "filter_sets": [simple_filter_set]
+                }]
+            }
 
         data = {
             "MimeType": UserSegment.mime_type,
@@ -456,15 +468,17 @@ class TestSegmentMembersView(SegmentManagementTest,
             "MimeType": IsDeactivatedFilterSet.mime_type,
             "Deactivated": True
         }
-        deactivated_seg = self._create_segment('Deactivated Users',
-                                   filter_set=deactivated_filter_set).json_body
+        deactivated_seg = self._create_segment(
+            'Deactivated Users',
+            simple_filter_set=deactivated_filter_set).json_body
 
         activated_filter_set = {
             "MimeType": IsDeactivatedFilterSet.mime_type,
             "Deactivated": False
         }
-        activated_seg = self._create_segment('Activated Users',
-                                             filter_set=activated_filter_set).json_body
+        activated_seg = self._create_segment(
+            'Activated Users',
+            simple_filter_set=activated_filter_set).json_body
 
         # Matches prior to deactivation
         deactivated_members_url = self._members_url(deactivated_seg)
@@ -528,8 +542,9 @@ class TestSegmentMembersView(SegmentManagementTest,
             "MimeType": IsDeactivatedFilterSet.mime_type,
             "Deactivated": False
         }
-        segment = self._create_segment('Activated Users',
-                                       filter_set=activated_filter_set).json_body
+        segment = self._create_segment(
+            'Activated Users',
+            simple_filter_set=activated_filter_set).json_body
 
         # Deactivate user
         self._deactivate_user('user.three.deactivated')
