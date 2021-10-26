@@ -21,7 +21,7 @@
                      zope.site.interfaces.INewLocalSite"/>
 
     <configure zcml:condition="have segments">
-        <subscriber factory=".workspaces.SegmentsCollection"
+        <subscriber factory=".workspaces.segments_collection"
                     for="nti.app.site.workspaces.interfaces.ISiteAdminWorkspace"
                     provides=".interfaces.ISegmentsCollection" />
     </configure>
