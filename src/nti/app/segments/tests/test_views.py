@@ -27,6 +27,10 @@ from webob.cookies import parse_cookie
 
 from zope import lifecycleevent
 
+from zope.security.interfaces import IPrincipal
+
+from zope.securitypolicy.principalrole import principalRoleManager
+
 from nti.app.segments.tests import SiteAdminTestMixin
 
 from nti.app.site.hostpolicy import create_site
@@ -43,6 +47,8 @@ from nti.app.users.utils import set_user_creation_site
 from nti.dataserver.authorization import ROLE_ADMIN
 
 from nti.dataserver.tests import mock_dataserver as mock_ds
+
+from nti.dataserver.users import User
 
 from nti.dataserver.users.interfaces import IFriendlyNamed
 
@@ -87,6 +93,14 @@ class WorkspaceTestMixin(TestBaseMixin):
     def forbid_workspace(self, ws_name, **kwargs):
         workspace = self.get_workspace(ws_name, kwargs)
         assert_that(workspace, is_(none()), ws_name)
+
+    def forbid_collection(self, ws_name, collection_name, **kwargs):
+        workspace = self.get_workspace(ws_name, kwargs)
+        assert_that(workspace, not_none(), "Missing workspace %s" % (ws_name,))
+
+        collection = [c for c in workspace.get('Items', ())
+                      if c.get('Class') == 'Collection' and c.get('Title') == collection_name]
+        assert_that(collection, has_length(0), collection_name)
 
 
 class SegmentManagementMixin(AppTestBaseMixin,
@@ -252,7 +266,8 @@ class TestCreateSegments(SegmentManagementTest,
     @WithSharedApplicationMockDS(users=('site.admin.one',
                                         'site.admin.two',
                                         'nti.admin',
-                                        'non.admin'),
+                                        'non.admin',
+                                        'content.admin'),
                                  testapp=True,
                                  default_authenticate=True)
     def test_list(self):
@@ -260,6 +275,19 @@ class TestCreateSegments(SegmentManagementTest,
         site_admin_two_env = self._make_extra_environ(username='site.admin.two')
         nti_admin_env = self._make_extra_environ(username='nti.admin')
         non_admin_env = self._make_extra_environ(username='non.admin')
+        content_admin = self._make_extra_environ(username='content.admin')
+
+        # Content admins have no access
+        with mock_ds.mock_db_trans(self.ds):
+            prm = principalRoleManager
+            user = User.get_user(username='content.admin')
+            prm.assignRoleToPrincipal('nti.roles.contentlibrary.admin',
+                                      IPrincipal(user).id,
+                                      check=False)
+
+        self.forbid_collection('SiteAdmin', 'Segments',
+                               extra_environ=content_admin)
+
         with mock_ds.mock_db_trans(site_name='alpha.nextthought.com'):
             self.make_site_admins('site.admin.one', 'site.admin.two')
 
