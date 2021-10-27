@@ -72,11 +72,17 @@ class LastActiveFilterSet(SchemaConfigured,
         return get_metadata_catalog()
 
     def included_intids(self, start, end):
+        # Ensure adjacent ranges don't overlap
+        exclude_max = False if end is None else True
+
         query = {
             IX_MIMETYPE: {'any_of': (USER_MIME_TYPE,)},
-            IX_LASTSEEN: {'between': (start, end)},
+            IX_LASTSEEN: {'between': (start, end, False, exclude_max)},
         }
-        return self.catalog.apply(query)
+
+        result = self.catalog.apply(query)
+
+        return result
 
     def apply(self, initial_set):
         start, end = self.period.range_tuple
