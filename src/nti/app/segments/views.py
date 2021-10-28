@@ -11,7 +11,10 @@ import transaction
 
 from pyramid import httpexceptions as hexc
 
+from pyramid.config import not_
+
 from pyramid.view import view_config
+from pyramid.view import view_defaults
 
 from zc.displayname.interfaces import IDisplayNameGenerator
 
@@ -160,7 +163,8 @@ class DeleteSegmentView(AbstractAuthenticatedView):
              context=IUserSegment,
              name=VIEW_MEMBERS,
              accept='application/json',
-             permission=ACT_SEARCH)
+             permission=ACT_SEARCH,
+             request_param=not_('format'))
 class SegmentMembersView(AbstractEntityViewMixin):
 
     # TODO: Consider extracting sorting/externalization logic to a mixin,
@@ -259,13 +263,14 @@ class PreviewSegmentMembersView(SegmentMembersView,
             transaction.doom()
 
 
-@view_config(route_name='objects.generic.traversal',
-             request_method='GET',
-             context=IUserSegment,
-             accept='text/csv',
-             name=VIEW_MEMBERS,
-             decorator=download_cookie_decorator,
-             permission=ACT_SEARCH)
+@view_defaults(route_name='objects.generic.traversal',
+               request_method='GET',
+               context=IUserSegment,
+               name=VIEW_MEMBERS,
+               decorator=download_cookie_decorator,
+               permission=ACT_SEARCH)
+@view_config(accept='text/csv')
+@view_config(request_param='format=text/csv')
 class SegmentMembersCSVView(SegmentMembersView,
                             UsersCSVExportMixin):
 

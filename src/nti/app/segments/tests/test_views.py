@@ -594,6 +594,13 @@ class TestSegmentMembersView(SegmentManagementTest, SegmentMembersViewMixin):
         assert_that(members.content_disposition,
                     is_('attachment; filename="users_export-Activated_Users.csv"'))
 
+        # Check that format=text/csv works for CSV as well
+        csv_params = params.copy()
+        csv_params['format'] = 'text/csv'
+        members = self.testapp.get(members_url, params=csv_params,)
+        assert_that(members.content_disposition,
+                    is_('attachment; filename="users_export-Activated_Users.csv"'))
+
         _, rows = self.normalize_userinfo_csv(members.body)
 
         assert_that(rows, has_length(4))
@@ -615,7 +622,7 @@ class TestSegmentMembersView(SegmentManagementTest, SegmentMembersViewMixin):
         assert_that(rows[1], is_('user.one,User One,User One,one@user.org,,,aaaaaaa'))
         del params['filter']
 
-        # As does call with empty string
+        # Check download-token as empty string
         params['download-token'] = ''
         members = self.testapp.get(members_url, params, status=200, headers=headers)
         _, rows = self.normalize_userinfo_csv(members.body)
