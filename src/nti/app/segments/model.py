@@ -12,18 +12,19 @@ import time
 
 from zope import interface
 
-from zope.cachedescriptors.property import Lazy
-
 from zope.container.contained import Contained
 
+from nti.app.segments.interfaces import ICreatedTimeFilterSet
 from nti.app.segments.interfaces import ILastActiveFilterSet
 from nti.app.segments.interfaces import IRelativeOffset
+from nti.app.segments.interfaces import ITimeRangeFilterSet
 from nti.app.segments.interfaces import RANGE_OP_AFTER
 
 from nti.coremetadata.interfaces import IX_LASTSEEN
 
 from nti.dataserver.metadata import get_metadata_catalog
 
+from nti.dataserver.metadata.index import IX_CREATEDTIME
 from nti.dataserver.metadata.index import IX_MIMETYPE
 
 from nti.schema.fieldproperty import createDirectFieldProperties
@@ -57,33 +58,56 @@ class RelativeOffset(SchemaConfigured,
         return None, offset_time
 
 
-@interface.implementer(ILastActiveFilterSet)
-class LastActiveFilterSet(SchemaConfigured,
-                          Contained):
-    createDirectFieldProperties(ILastActiveFilterSet)
-
-    mimeType = mime_type = "application/vnd.nextthought.segments.lastactivefilterset"
+class TimeRangeFilterSet(SchemaConfigured, Contained):
+    createDirectFieldProperties(ITimeRangeFilterSet)
 
     def __init__(self, **kwargs):
         SchemaConfigured.__init__(self, **kwargs)
 
-    @Lazy
+    @property
+    def index_name(self):
+        raise NotImplementedError()
+
+    @property
     def catalog(self):
         return get_metadata_catalog()
 
-    def included_intids(self, start, end):
+    def _query(self, start, end):
         # Ensure adjacent ranges don't overlap
         exclude_max = False if end is None else True
 
         query = {
             IX_MIMETYPE: {'any_of': (USER_MIME_TYPE,)},
-            IX_LASTSEEN: {'between': (start, end, False, exclude_max)},
+            self.index_name: {'between': (start, end, False, exclude_max)},
         }
 
-        result = self.catalog.apply(query)
+        return query
 
-        return result
+    def included_intids(self, start, end):
+        return self.catalog.apply(self._query(start, end))
 
     def apply(self, initial_set):
         start, end = self.period.range_tuple
         return initial_set.intersection(self.included_intids(start, end))
+
+
+@interface.implementer(ILastActiveFilterSet)
+class LastActiveFilterSet(TimeRangeFilterSet):
+    createDirectFieldProperties(ILastActiveFilterSet)
+
+    mimeType = mime_type = "application/vnd.nextthought.segments.lastactivefilterset"
+
+    @property
+    def index_name(self):
+        return IX_LASTSEEN
+
+
+@interface.implementer(ICreatedTimeFilterSet)
+class CreatedTimeFilterSet(TimeRangeFilterSet):
+    createDirectFieldProperties(ICreatedTimeFilterSet)
+
+    mimeType = mime_type = "application/vnd.nextthought.segments.createdtimefilterset"
+
+    @property
+    def index_name(self):
+        return IX_CREATEDTIME
