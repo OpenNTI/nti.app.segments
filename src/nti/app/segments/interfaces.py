@@ -71,14 +71,28 @@ class IRelativeOffset(ITimeRange):
                            required=True)
 
 
-class ILastActiveFilterSet(IUserFilterSet):
+class ITimeRangeFilterSet(IUserFilterSet):
     """
-    A filter set describing users active within some time frame, initially
-    within some time period from the present (e.g. last 30 days), but could be
+    A filter set selecting users with a specific event within a defined time
+    range, e.g. when a user was last active.  Initially the range is based on
+    some time period from the present (e.g. last 30 days), but could be
     extended to static start and end dates.
     """
 
     period = Object(ITimeRange,
                     title=u'Period',
                     description=u'Description of a time range encompassing '
-                                u'the desired user activity.')
+                                u'the desired user attribute value.')
+
+
+class ILastActiveFilterSet(ITimeRangeFilterSet):
+    """
+    A time-range filter set based on user's most recent activity on the
+    platform.
+    """
+
+
+class ICreatedTimeFilterSet(ITimeRangeFilterSet):
+    """
+    A time-range filter set based on when a user was created in teh system.
+    """

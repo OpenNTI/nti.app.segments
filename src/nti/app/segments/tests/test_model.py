@@ -32,10 +32,12 @@ from zope.intid import IIntIds
 
 from zope.lifecycleevent import modified
 
+from nti.app.segments.interfaces import ICreatedTimeFilterSet
 from nti.app.segments.interfaces import ILastActiveFilterSet
 from nti.app.segments.interfaces import RANGE_OP_AFTER
 from nti.app.segments.interfaces import RANGE_OP_BEFORE
 
+from nti.app.segments.model import CreatedTimeFilterSet
 from nti.app.segments.model import LastActiveFilterSet
 from nti.app.segments.model import RelativeOffset
 
@@ -63,9 +65,12 @@ from nti.segments.model import IntIdSet
 from nti.testing.matchers import verifiably_provides
 
 
-class TestLastActiveFilterSet(TestCase):
+class TimeRangeFilterSetModelTestMixin(object):
 
     layer = SharedConfiguringTestLayer
+
+    factory = None
+    iface = None
 
     def _internalize(self, external):
         factory = find_factory_for(external)
@@ -78,12 +83,12 @@ class TestLastActiveFilterSet(TestCase):
     def test_valid_interface(self):
         offset = RelativeOffset(duration=timedelta(days=30),
                                 operator=RANGE_OP_AFTER)
-        assert_that(LastActiveFilterSet(period=offset),
-                    verifiably_provides(ILastActiveFilterSet))
+        assert_that(self.factory(period=offset),
+                    verifiably_provides(self.iface))
 
     def test_internalize(self):
         ext_obj = {
-            "MimeType": LastActiveFilterSet.mime_type,
+            "MimeType": self.factory.mime_type,
             "period": {
                 "MimeType": RelativeOffset.mime_type,
                 "duration": "P20D",
@@ -93,6 +98,7 @@ class TestLastActiveFilterSet(TestCase):
             }
         }
         filter_set = self._internalize(ext_obj)
+        assert_that(filter_set, is_(self.factory))
         assert_that(filter_set, has_properties(
             period=has_properties(
                 duration=timedelta(days=20),
@@ -103,12 +109,12 @@ class TestLastActiveFilterSet(TestCase):
     def test_externalize(self):
         offset = RelativeOffset(duration=timedelta(days=30),
                                 operator=RANGE_OP_AFTER)
-        filter_set = LastActiveFilterSet(period=offset)
+        filter_set = self.factory(period=offset)
 
         ext_filterset = to_external_object(filter_set)
         assert_that(ext_filterset,
                     has_entries({
-                        'MimeType': LastActiveFilterSet.mime_type,
+                        'MimeType': self.factory.mime_type,
                         "period": has_entries({
                             "MimeType": RelativeOffset.mime_type,
                             "duration": "P30D",
@@ -117,6 +123,22 @@ class TestLastActiveFilterSet(TestCase):
                     }))
 
         assert_that(ext_filterset['period'], not_(has_key('range_tuple')))
+
+
+class TestLastActiveFilterSet(TimeRangeFilterSetModelTestMixin, TestCase):
+
+    layer = SharedConfiguringTestLayer
+
+    factory = LastActiveFilterSet
+    iface = ILastActiveFilterSet
+
+
+class TestCreatedTimeFilterSet(TimeRangeFilterSetModelTestMixin, TestCase):
+
+    layer = SharedConfiguringTestLayer
+
+    factory = CreatedTimeFilterSet
+    iface = ICreatedTimeFilterSet
 
 
 @contextmanager
@@ -130,15 +152,17 @@ def _provide_utility(util, iface, **kwargs):
         gsm.unregisterUtility(util, iface, **kwargs)
 
 
-class TestApplyLastActiveFilterSet(TestCase):
+class ApplyTimeRangeFilterSetTestMixin(object):
 
     layer = SharedConfiguringTestLayer
 
-    @staticmethod
-    def _create_last_active_filterset(duration, operator):
+    factory = None
+    attribute_name = None
+
+    def _create_filterset(self, duration, operator):
         offset = RelativeOffset(duration=duration,
                                 operator=operator)
-        filter_set = LastActiveFilterSet(period=offset)
+        filter_set = self.factory(period=offset)
 
         return filter_set
 
@@ -156,7 +180,7 @@ class TestApplyLastActiveFilterSet(TestCase):
         return [self.intids.getObject(uid).username for uid in result_intids]
 
     @WithMockDS
-    def test_last_active(self):
+    def test_apply(self):
 
         with mock_dataserver.mock_db_trans():
             create_site('last-active-test-site')
@@ -168,20 +192,22 @@ class TestApplyLastActiveFilterSet(TestCase):
                 user_three = User.create_user(username=u'user.three')
 
                 now = time.time()
-                user_one.lastSeenTime = now
+                setattr(user_one, self.attribute_name, now)
                 modified(user_one)
 
-                user_two.lastSeenTime = now - timedelta(days=10).total_seconds()
+                setattr(user_two, self.attribute_name,
+                        now - timedelta(days=10).total_seconds())
                 modified(user_two)
 
-                user_three.lastSeenTime = now - timedelta(days=30).total_seconds()
+                setattr(user_three, self.attribute_name,
+                        now - timedelta(days=30).total_seconds())
                 modified(user_three)
 
             with mock_dataserver.mock_db_trans(site_name='last-active-test-site'):
-                filter_set_before = self._create_last_active_filterset(timedelta(days=0),
-                                                                       RANGE_OP_BEFORE)
-                filter_set_after = self._create_last_active_filterset(timedelta(days=0),
-                                                                      RANGE_OP_AFTER)
+                filter_set_before = self._create_filterset(timedelta(days=0),
+                                                           RANGE_OP_BEFORE)
+                filter_set_after = self._create_filterset(timedelta(days=0),
+                                                          RANGE_OP_AFTER)
 
                 users = self.apply(filter_set_before)
                 assert_that(users, contains_inanyorder(u'user.two',
@@ -191,10 +217,10 @@ class TestApplyLastActiveFilterSet(TestCase):
                 assert_that(users, contains_inanyorder(u'user.one'))
 
             with mock_dataserver.mock_db_trans(site_name='last-active-test-site'):
-                filter_set_before = self._create_last_active_filterset(timedelta(days=-11),
-                                                                       RANGE_OP_BEFORE)
-                filter_set_after = self._create_last_active_filterset(timedelta(days=-11),
-                                                                      RANGE_OP_AFTER)
+                filter_set_before = self._create_filterset(timedelta(days=-11),
+                                                           RANGE_OP_BEFORE)
+                filter_set_after = self._create_filterset(timedelta(days=-11),
+                                                          RANGE_OP_AFTER)
 
                 users = self.apply(filter_set_before)
                 assert_that(users, contains_inanyorder(u'user.three'))
@@ -203,10 +229,10 @@ class TestApplyLastActiveFilterSet(TestCase):
                 assert_that(users, contains_inanyorder(u'user.one', u'user.two'))
 
             with mock_dataserver.mock_db_trans(site_name='last-active-test-site'):
-                filter_set_before = self._create_last_active_filterset(timedelta(days=-31),
-                                                                       RANGE_OP_BEFORE)
-                filter_set_after = self._create_last_active_filterset(timedelta(days=-31),
-                                                                      RANGE_OP_AFTER)
+                filter_set_before = self._create_filterset(timedelta(days=-31),
+                                                           RANGE_OP_BEFORE)
+                filter_set_after = self._create_filterset(timedelta(days=-31),
+                                                          RANGE_OP_AFTER)
 
                 users = self.apply(filter_set_before)
                 assert_that(users, has_length(0))
@@ -215,3 +241,19 @@ class TestApplyLastActiveFilterSet(TestCase):
                 assert_that(users, contains_inanyorder(u'user.one',
                                                        u'user.two',
                                                        u'user.three'))
+
+
+class TestApplyLastActiveFilterSet(ApplyTimeRangeFilterSetTestMixin, TestCase):
+
+    layer = SharedConfiguringTestLayer
+
+    factory = LastActiveFilterSet
+    attribute_name = u'lastSeenTime'
+
+
+class TestApplyCreatedTimeFilterSet(ApplyTimeRangeFilterSetTestMixin, TestCase):
+
+    layer = SharedConfiguringTestLayer
+
+    factory = CreatedTimeFilterSet
+    attribute_name = u'createdTime'
