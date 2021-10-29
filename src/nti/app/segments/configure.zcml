@@ -47,6 +47,15 @@
                      pyramid.interfaces.IRequest"
                 provides="nti.externalization.interfaces.IExternalMappingDecorator"/>
 
+    <!-- Traversal -->
+    <adapter factory="nti.traversal.traversal.DefaultAdapterTraversable"
+             for="nti.segments.interfaces.IUserSegment pyramid.interfaces.IRequest" />
+
+    <adapter name="members"
+             for="nti.segments.interfaces.IUserSegment pyramid.interfaces.IRequest"
+             factory=".traversal.MembersPathAdapter"
+             provides="zope.traversing.interfaces.IPathAdapter" />
+
     <!-- Externalization -->
     <adapter factory=".internalization.TimeRangeUpdater"
              for=".interfaces.ITimeRange"

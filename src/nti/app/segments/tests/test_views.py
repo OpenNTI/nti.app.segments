@@ -593,11 +593,22 @@ class TestSegmentMembersView(SegmentManagementTest, SegmentMembersViewMixin):
         members = self.testapp.get(members_url, params=params, headers=headers)
         assert_that(members.content_disposition,
                     is_('attachment; filename="users_export-Activated_Users.csv"'))
+        _, rows = self.normalize_userinfo_csv(members.body)
+        assert_that(rows, has_length(4))
 
         # Check that format=text/csv works for CSV as well
         csv_params = params.copy()
         csv_params['format'] = 'text/csv'
         members = self.testapp.get(members_url, params=csv_params,)
+        assert_that(members.content_disposition,
+                    is_('attachment; filename="users_export-Activated_Users.csv"'))
+        _, rows = self.normalize_userinfo_csv(members.body)
+        assert_that(rows, has_length(4))
+
+        # Check POST view
+        export_members_url = self.require_link_href_with_rel(segment, 'export-members')
+        export_members_url = "%s?format=text/csv" % (export_members_url,)
+        members = self.testapp.post(export_members_url)
         assert_that(members.content_disposition,
                     is_('attachment; filename="users_export-Activated_Users.csv"'))
 
@@ -608,6 +619,19 @@ class TestSegmentMembersView(SegmentManagementTest, SegmentMembersViewMixin):
         assert_that(rows[1], is_('user.one,User One,User One,one@user.org,,,aaaaaaa'))
         assert_that(rows[2], is_('user.two,User Two,User Two,two@user.org,,,'))
         assert_that(rows[3], is_('site.admin,Admin One,Admin One,site.admin@user.org,,,'))
+
+        # Filter by specific usernames
+        usernames = {'usernames': ['user.one', 'user.two']}
+        members = self.testapp.post_json(export_members_url, params=usernames)
+        assert_that(members.content_disposition,
+                    is_('attachment; filename="users_export-Activated_Users.csv"'))
+
+        _, rows = self.normalize_userinfo_csv(members.body)
+
+        assert_that(rows, has_length(3))
+        assert_that(rows[0], is_('username,realname,alias,email,createdTime,lastLoginTime,ext id1'))
+        assert_that(rows[1], is_('user.one,User One,User One,one@user.org,,,aaaaaaa'))
+        assert_that(rows[2], is_('user.two,User Two,User Two,two@user.org,,,'))
 
         # Check filtering
         params['filterAdmins'] = True
