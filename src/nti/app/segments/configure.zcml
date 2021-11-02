@@ -58,6 +58,7 @@
     <ext:registerAutoPackageIO
             root_interfaces=".interfaces.IRelativeOffset
                              .interfaces.ILastActiveFilterSet
-                             .interfaces.ICreatedTimeFilterSet"
+                             .interfaces.ICreatedTimeFilterSet
+                             .interfaces.IIsDeactivatedFilterSet"
             modules=".model"/>
 </configure>

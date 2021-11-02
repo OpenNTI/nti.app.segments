@@ -22,7 +22,7 @@ from nti.segments.model import install_segments_container
 
 from nti.site import get_all_host_sites
 
-generation = 1
+generation = 2
 
 logger = __import__('logging').getLogger(__name__)
 

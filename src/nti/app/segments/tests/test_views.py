@@ -31,6 +31,8 @@ from zope.security.interfaces import IPrincipal
 
 from zope.securitypolicy.principalrole import principalRoleManager
 
+from nti.app.segments.model import IsDeactivatedFilterSet
+
 from nti.app.segments.tests import SiteAdminTestMixin
 
 from nti.app.site.hostpolicy import create_site
@@ -59,7 +61,6 @@ from nti.identifiers.interfaces import IUserExternalIdentityContainer
 from nti.ntiids.ntiids import find_object_with_ntiid
 
 from nti.segments.model import IntersectionUserFilterSet
-from nti.segments.model import IsDeactivatedFilterSet
 from nti.segments.model import UnionUserFilterSet
 from nti.segments.model import UserSegment
 
