@@ -33,6 +33,7 @@ from zope.securitypolicy.principalrole import principalRoleManager
 
 from nti.app.segments.model import IsDeactivatedFilterSet
 
+from nti.app.segments.tests import SegmentApplicationTestLayer
 from nti.app.segments.tests import SiteAdminTestMixin
 
 from nti.app.site.hostpolicy import create_site
@@ -174,6 +175,8 @@ class SegmentManagementMixin(AppTestBaseMixin,
 class SegmentManagementTest(SegmentManagementMixin,
                             ApplicationLayerTest,
                             WorkspaceTestMixin):
+
+    layer = SegmentApplicationTestLayer
 
     WORKSPACE_NAME = 'Segments'
 
