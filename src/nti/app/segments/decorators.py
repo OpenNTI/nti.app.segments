@@ -10,7 +10,8 @@ from zope import interface
 
 from nti.app.renderers.decorators import AbstractAuthenticatedRequestAwareDecorator
 
-from nti.app.segments import VIEW_MEMBERS
+from nti.app.segments import MEMBERS
+from nti.app.segments import VIEW_EXPORT_MEMBERS
 from nti.app.segments import VIEW_MEMBERS_PREVIEW
 
 from nti.appserver.pyramid_authorization import has_permission
@@ -44,8 +45,13 @@ class SegmentLinkDecorator(AbstractAuthenticatedRequestAwareDecorator):
         if has_permission(ACT_SEARCH, context, self.request):
             links.append(Link(context,
                               rel='members',
-                              elements=(VIEW_MEMBERS,),
+                              elements=(MEMBERS,),
                               method='GET'))
+
+            links.append(Link(context,
+                              rel='export-members',
+                              elements=(MEMBERS, '@@' + VIEW_EXPORT_MEMBERS),
+                              method='POST'))
 
             links.append(Link(context,
                               rel='members_preview',

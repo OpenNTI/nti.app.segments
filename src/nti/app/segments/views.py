@@ -16,6 +16,8 @@ from pyramid.config import not_
 from pyramid.view import view_config
 from pyramid.view import view_defaults
 
+from requests.structures import CaseInsensitiveDict
+
 from zc.displayname.interfaces import IDisplayNameGenerator
 
 from zope import component
@@ -33,10 +35,12 @@ from nti.app.externalization.view_mixins import ModeledContentUploadRequestUtils
 
 from nti.app.renderers.interfaces import IUncacheableInResponse
 
-from nti.app.segments import VIEW_MEMBERS
+from nti.app.segments import VIEW_EXPORT_MEMBERS
 from nti.app.segments import VIEW_MEMBERS_PREVIEW
 
 from nti.app.segments.interfaces import ISegmentsCollection
+
+from nti.app.segments.traversal import MembersPathAdapter
 
 from nti.app.users.utils import get_site_admins
 
@@ -162,8 +166,7 @@ class DeleteSegmentView(AbstractAuthenticatedView):
 
 @view_config(route_name='objects.generic.traversal',
              request_method='GET',
-             context=IUserSegment,
-             name=VIEW_MEMBERS,
+             context=MembersPathAdapter,
              accept='application/json',
              permission=ACT_SEARCH,
              request_param=not_('format'))
@@ -231,13 +234,17 @@ class SegmentMembersView(AbstractEntityViewMixin):
         # obtained from the nearest IHostPolicyFolder
         return find_interface(self.context, IHostPolicyFolder).__name__
 
+    @Lazy
+    def segment(self):
+        return find_interface(self.context, IUserSegment)
+
     def get_entity_intids(self, site=None):
         # The parent class will handle any deactivated entity filtering.
         initial_intids = intids_of_users_by_site(site, filter_deactivated=False)
 
-        if self.context.filter_set is not None:
+        if self.segment.filter_set is not None:
             rs = IntIdSet(initial_intids)
-            initial_intids = self.context.filter_set.apply(rs).intids()
+            initial_intids = self.segment.filter_set.apply(rs).intids()
 
         return initial_intids
 
@@ -267,8 +274,7 @@ class PreviewSegmentMembersView(SegmentMembersView,
 
 @view_defaults(route_name='objects.generic.traversal',
                request_method='GET',
-               context=IUserSegment,
-               name=VIEW_MEMBERS,
+               context=MembersPathAdapter,
                decorator=download_cookie_decorator,
                permission=ACT_SEARCH)
 @view_config(accept='text/csv')
@@ -277,11 +283,59 @@ class SegmentMembersCSVView(SegmentMembersView,
                             UsersCSVExportMixin):
 
     def _get_filename(self):
-        return safe_filename(u'users_export-%s.csv' % (self.context.title,))
+        return safe_filename(u'users_export-%s.csv' % (self.segment.title,))
 
     def __call__(self):
         self.check_access()
         return self._create_csv_response()
+
+
+@view_config(route_name='objects.generic.traversal',
+             request_method='POST',
+             context=MembersPathAdapter,
+             name=VIEW_EXPORT_MEMBERS,
+             decorator=download_cookie_decorator,
+             permission=ACT_SEARCH,
+             request_param='format=text/csv')
+class SegmentMembersCSVPOSTView(SegmentMembersCSVView,
+                                ModeledContentUploadRequestUtilsMixin):
+
+    def readInput(self):
+        if self.request.POST:
+            result = {'usernames': self.request.params.getall('usernames') or []}
+        elif self.request.body:
+            result = super(SegmentMembersCSVPOSTView, self).readInput()
+        else:
+            result = self.request.params
+        return CaseInsensitiveDict(result)
+
+    @Lazy
+    def _params(self):
+        return self.readInput()
+
+    def _get_result_iter(self):
+        usernames = self._params.get('usernames', ())
+        if not usernames:
+            return super(SegmentMembersCSVPOSTView, self)._get_result_iter()
+        intids = component.getUtility(IIntIds)
+        result = []
+        for username in usernames:
+            user = User.get_user(username)
+            if user is None:
+                continue
+            user_intid = intids.queryId(user)
+            if user_intid is None:
+                continue
+            # Validate the user is in the original result set
+            if user_intid in self.filtered_intids:
+                result.append(user)
+        return result
+
+    def __call__(self):
+        try:
+            return super(SegmentMembersCSVPOSTView, self).__call__()
+        finally:
+            self.request.environ['nti.commit_veto'] = 'abort'
 
 
 class SegmentSummary(object):
