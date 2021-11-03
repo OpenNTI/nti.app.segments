@@ -97,6 +97,8 @@ TOTAL = StandardExternalFields.TOTAL
 class CreateSegmentView(ModeledContentUploadRequestUtilsMixin,
                         AbstractAuthenticatedView):
 
+    content_predicate = ISegment.providedBy
+
     @property
     def _container(self):
         return self.context

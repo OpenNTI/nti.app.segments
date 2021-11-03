@@ -13,6 +13,7 @@ from itertools import chain
 
 from hamcrest import assert_that
 from hamcrest import contains
+from hamcrest import contains_string
 from hamcrest import described_as
 from hamcrest import has_entries
 from hamcrest import has_entry
@@ -207,6 +208,17 @@ class TestCreateSegments(SegmentManagementTest,
                                dict(title=u'my segment'),
                                extra_environ=joe_env,
                                status=403)
+
+        # Only segment objects can be added.
+        data = {
+            "MimeType": IsDeactivatedFilterSet.mime_type,
+            "Deactivated": True
+        }
+        res = self.testapp.post_json(create_path,
+                                     data,
+                                     extra_environ=site_admin_one_env,
+                                     status=422)
+        assert_that(res.body, contains_string('Unsupported/missing Class'))
 
         res = self._create_segment('my segment',
                                    extra_environ=site_admin_one_env,
