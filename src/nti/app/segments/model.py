@@ -15,17 +15,22 @@ from zope import interface
 from zope.container.contained import Contained
 
 from nti.app.segments.interfaces import ICreatedTimeFilterSet
+from nti.app.segments.interfaces import IIsDeactivatedFilterSet
 from nti.app.segments.interfaces import ILastActiveFilterSet
 from nti.app.segments.interfaces import IRelativeOffset
 from nti.app.segments.interfaces import ITimeRangeFilterSet
 from nti.app.segments.interfaces import RANGE_OP_AFTER
 
+from nti.coremetadata.interfaces import IX_IS_DEACTIVATED
 from nti.coremetadata.interfaces import IX_LASTSEEN
+from nti.coremetadata.interfaces import IX_TOPICS
 
 from nti.dataserver.metadata import get_metadata_catalog
 
 from nti.dataserver.metadata.index import IX_CREATEDTIME
 from nti.dataserver.metadata.index import IX_MIMETYPE
+
+from nti.dataserver.users import get_entity_catalog
 
 from nti.schema.fieldproperty import createDirectFieldProperties
 
@@ -111,3 +116,30 @@ class CreatedTimeFilterSet(TimeRangeFilterSet):
     @property
     def index_name(self):
         return IX_CREATEDTIME
+
+
+@interface.implementer(IIsDeactivatedFilterSet)
+class IsDeactivatedFilterSet(SchemaConfigured):
+
+    createDirectFieldProperties(IIsDeactivatedFilterSet)
+
+    mimeType = mime_type = "application/vnd.nextthought.segments.isdeactivatedfilterset"
+
+    def __init__(self, **kwargs):
+        SchemaConfigured.__init__(self, **kwargs)
+
+    @property
+    def entity_catalog(self):
+        return get_entity_catalog()
+
+    @property
+    def deactivated_intids(self):
+        deactivated_idx = self.entity_catalog[IX_TOPICS][IX_IS_DEACTIVATED]
+        deactivated_ids = self.entity_catalog.family.IF.Set(deactivated_idx.getIds() or ())
+
+        return deactivated_ids
+
+    def apply(self, initial_set):
+        if self.Deactivated:
+            return initial_set.intersection(self.deactivated_intids)
+        return initial_set.difference(self.deactivated_intids)

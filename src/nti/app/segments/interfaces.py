@@ -14,6 +14,7 @@ from zope.schema import vocabulary
 
 from nti.app.site.workspaces.interfaces import ISiteAdminCollection
 
+from nti.schema.field import Bool
 from nti.schema.field import ListOrTuple
 from nti.schema.field import Number
 from nti.schema.field import Object
@@ -96,3 +97,14 @@ class ICreatedTimeFilterSet(ITimeRangeFilterSet):
     """
     A time-range filter set based on when a user was created in teh system.
     """
+
+
+class IIsDeactivatedFilterSet(IUserFilterSet):
+    """
+    A filter set describing users with a given deactivation status.
+    """
+
+    Deactivated = Bool(title=u'Deactivated',
+                       description=u'Whether to include only deactivated or activated users',
+                       required=True,
+                       default=False)

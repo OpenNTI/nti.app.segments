@@ -33,11 +33,13 @@ from zope.intid import IIntIds
 from zope.lifecycleevent import modified
 
 from nti.app.segments.interfaces import ICreatedTimeFilterSet
+from nti.app.segments.interfaces import IIsDeactivatedFilterSet
 from nti.app.segments.interfaces import ILastActiveFilterSet
 from nti.app.segments.interfaces import RANGE_OP_AFTER
 from nti.app.segments.interfaces import RANGE_OP_BEFORE
 
 from nti.app.segments.model import CreatedTimeFilterSet
+from nti.app.segments.model import IsDeactivatedFilterSet
 from nti.app.segments.model import LastActiveFilterSet
 from nti.app.segments.model import RelativeOffset
 
@@ -257,3 +259,48 @@ class TestApplyCreatedTimeFilterSet(ApplyTimeRangeFilterSetTestMixin, TestCase):
 
     factory = CreatedTimeFilterSet
     attribute_name = u'createdTime'
+
+
+class IsDeactivatedModelTest(object):
+
+    layer = SharedConfiguringTestLayer
+
+    def _internalize(self, external):
+        factory = find_factory_for(external)
+        assert_that(factory, is_(not_none()))
+        new_io = factory()
+        if new_io is not None:
+            update_from_external_object(new_io, external)
+        return new_io
+
+    def test_valid_interface(self):
+        offset = RelativeOffset(duration=timedelta(days=30),
+                                operator=RANGE_OP_AFTER)
+        assert_that(IsDeactivatedFilterSet(period=offset),
+                    verifiably_provides(IIsDeactivatedFilterSet))
+
+    def test_internalize(self):
+        ext_obj = {
+            "MimeType": IsDeactivatedFilterSet.mime_type,
+            "period": {
+                "MimeType": RelativeOffset.mime_type,
+                "Deactivated": "true",
+            }
+        }
+        filter_set = self._internalize(ext_obj)
+        assert_that(filter_set, is_(IsDeactivatedFilterSet))
+        assert_that(filter_set, has_properties(
+            period=has_properties(
+                Deactivated=True,
+            )
+        ))
+
+    def test_externalize(self):
+        filter_set = IsDeactivatedFilterSet(Deactivated=False)
+
+        ext_filterset = to_external_object(filter_set)
+        assert_that(ext_filterset,
+                    has_entries({
+                        'MimeType': IsDeactivatedFilterSet.mime_type,
+                        "Deactivated": "false"
+                    }))
