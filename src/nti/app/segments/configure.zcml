@@ -68,6 +68,7 @@
             root_interfaces=".interfaces.IRelativeOffset
                              .interfaces.ILastActiveFilterSet
                              .interfaces.ICreatedTimeFilterSet
-                             .interfaces.IIsDeactivatedFilterSet"
+                             .interfaces.IIsDeactivatedFilterSet
+                             .interfaces.IStringProfileFieldFilterSet"
             modules=".model"/>
 </configure>
