@@ -176,7 +176,7 @@ class IStringProfileFieldFilterSet(IProfileFieldFilterSet):
     def ValueInvariant(self):
         # Should we forbid setting `value` for the other operators (e.g. `set`)?
         if self.value == IStringProfileFieldFilterSet['value'].missing_value:
-            if self.operator not in MATCH_OPS_REQUIRING_VALUE:
+            if self.operator in MATCH_OPS_REQUIRING_VALUE:
                 ve = ConstraintNotSatisfied(_(u"Must supply a value for the chosen operator."))
                 ve.field = IStringProfileFieldFilterSet['value']
 

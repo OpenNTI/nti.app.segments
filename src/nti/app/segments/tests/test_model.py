@@ -13,6 +13,7 @@ from unittest import TestCase
 
 import fudge
 from hamcrest import assert_that
+from hamcrest import calling
 from hamcrest import contains_inanyorder
 from hamcrest import has_entries
 from hamcrest import has_key
@@ -21,6 +22,7 @@ from hamcrest import has_properties
 from hamcrest import is_
 from hamcrest import not_
 from hamcrest import not_none
+from hamcrest import raises
 
 from zope import component
 from zope import interface
@@ -33,6 +35,9 @@ from zope.interface.interfaces import IComponents
 from zope.intid import IIntIds
 
 from zope.lifecycleevent import modified
+
+from zope.schema.interfaces import ConstraintNotSatisfied
+
 
 from nti.app.segments.interfaces import ICreatedTimeFilterSet
 from nti.app.segments.interfaces import IIsDeactivatedFilterSet
@@ -323,37 +328,47 @@ class StringProfileFieldFilterSetModelTest(TestCase):
 
     def test_valid_interface(self):
         assert_that(StringProfileFieldFilterSet(fieldName='alias',
-                                                operator=MATCH_OP_EQUAL),
+                                                operator=MATCH_OP_EQUAL,
+                                                value=u'test_value'),
                     verifiably_provides(IStringProfileFieldFilterSet))
 
-    def test_valid_interface_invariant(self):
-        assert_that(StringProfileFieldFilterSet(fieldName='alias',
-                                                operator=MATCH_OP_EQUAL),
-                    verifiably_provides(IStringProfileFieldFilterSet))
-
-    def test_internalize(self):
+    def test_interface_invariant(self):
         ext_obj = {
             "MimeType": StringProfileFieldFilterSet.mime_type,
             "fieldName": "alias",
             "operator": MATCH_OP_EQUAL
         }
+        assert_that(calling(self._internalize).with_args(ext_obj),
+                    raises(ConstraintNotSatisfied,
+                           u"Must supply a value for the chosen operator."))
+
+    def test_internalize(self):
+        ext_obj = {
+            "MimeType": StringProfileFieldFilterSet.mime_type,
+            "fieldName": "alias",
+            "operator": MATCH_OP_EQUAL,
+            "value": u"test_value"
+        }
         filter_set = self._internalize(ext_obj)
         assert_that(filter_set, is_(StringProfileFieldFilterSet))
         assert_that(filter_set, has_properties(
             fieldName="alias",
-            operator=MATCH_OP_EQUAL
+            operator=MATCH_OP_EQUAL,
+            value=u"test_value"
         ))
 
     def test_externalize(self):
         filter_set = StringProfileFieldFilterSet(fieldName='alias',
-                                                 operator=MATCH_OP_EQUAL)
+                                                 operator=MATCH_OP_EQUAL,
+                                                 value=u'test_value')
 
         ext_filterset = to_external_object(filter_set)
         assert_that(ext_filterset,
                     has_entries({
                         'MimeType': "application/vnd.nextthought.segments.stringprofilefieldfilterset",
                         "fieldName": "alias",
-                        "operator": MATCH_OP_EQUAL
+                        "operator": MATCH_OP_EQUAL,
+                        "value": u"test_value"
                     }))
 
 
