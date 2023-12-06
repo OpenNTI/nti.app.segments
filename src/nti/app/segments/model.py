@@ -8,17 +8,29 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
+import operator
 import time
 
+from zope import component
 from zope import interface
 
+from zope.catalog.interfaces import IAttributeIndex
+
 from zope.container.contained import Contained
+
+from zope.intid import IIntIds
 
 from nti.app.segments.interfaces import ICreatedTimeFilterSet
 from nti.app.segments.interfaces import IIsDeactivatedFilterSet
 from nti.app.segments.interfaces import ILastActiveFilterSet
 from nti.app.segments.interfaces import IRelativeOffset
+from nti.app.segments.interfaces import IStringProfileFieldFilterSet
 from nti.app.segments.interfaces import ITimeRangeFilterSet
+from nti.app.segments.interfaces import MATCH_OPS_REQUIRING_VALUE
+from nti.app.segments.interfaces import MATCH_OP_EQUAL
+from nti.app.segments.interfaces import MATCH_OP_NOT_EQUAL
+from nti.app.segments.interfaces import MATCH_OP_NOT_SET
+from nti.app.segments.interfaces import MATCH_OP_SET
 from nti.app.segments.interfaces import RANGE_OP_AFTER
 
 from nti.coremetadata.interfaces import IX_IS_DEACTIVATED
@@ -32,9 +44,13 @@ from nti.dataserver.metadata.index import IX_MIMETYPE
 
 from nti.dataserver.users import get_entity_catalog
 
+from nti.dataserver.users.interfaces import IUserProfile
+
 from nti.schema.fieldproperty import createDirectFieldProperties
 
 from nti.schema.schema import SchemaConfigured
+
+from nti.segments.model import IntIdSet
 
 logger = __import__('logging').getLogger(__name__)
 
@@ -143,3 +159,91 @@ class IsDeactivatedFilterSet(SchemaConfigured):
         if self.Deactivated:
             return initial_set.intersection(self.deactivated_intids)
         return initial_set.difference(self.deactivated_intids)
+
+
+_missing_value = object()
+
+#: Our set of operations, taking the actual value and test value, in that order
+_operations = {
+    MATCH_OP_EQUAL: operator.eq,
+    MATCH_OP_NOT_EQUAL: operator.ne,
+    MATCH_OP_SET: lambda x, _y: x is not None,
+    MATCH_OP_NOT_SET: lambda x, _y: x is None,
+}
+
+
+@interface.implementer(IStringProfileFieldFilterSet)
+class StringProfileFieldFilterSet(SchemaConfigured):
+
+    createDirectFieldProperties(IStringProfileFieldFilterSet)
+
+    mimeType = mime_type = "application/vnd.nextthought.segments.stringprofilefieldfilterset"
+
+    def __init__(self, **kwargs):
+        SchemaConfigured.__init__(self, **kwargs)
+
+    @property
+    def intids(self):
+        return component.getUtility(IIntIds)
+
+    @property
+    def _operation(self):
+        return _operations.get(self.operator)
+
+    @property
+    def _entity_catalog(self):
+        return get_entity_catalog()
+
+    def _search_index(self, initial_set):
+        # Currently only handling `IAttributeIndex` queries, which are used by
+        # all supported fields in the entity catalog.  These do not allow values
+        # of `None`
+        index = self._entity_catalog[self.fieldName]
+        if self.operator in MATCH_OPS_REQUIRING_VALUE and self.value is not None:
+            matched_intids = index.values_to_documents.get(self.value) or ()
+            if self.operator == MATCH_OP_EQUAL:
+                result = initial_set.intersection(matched_intids)
+            else:
+                result = initial_set.difference(matched_intids)
+        else:
+            matched_intids = index.documents_to_values.keys()
+
+            if self.operator in (MATCH_OP_SET, MATCH_OP_NOT_EQUAL):
+                # Objects whose value is set or not equal to None
+                result = initial_set.intersection(matched_intids)
+            else:
+                # Objects whose value is not set or equal to None
+                result = initial_set.difference(matched_intids)
+
+        return result
+
+    def _use_index(self):
+        if self.fieldName not in self._entity_catalog:
+            return False
+
+        # Currently only supporting IFieldIndex queries
+        return IAttributeIndex.providedBy(self._entity_catalog[self.fieldName])
+
+    def _search_objects(self, initial_set):
+        result = IntIdSet([])
+        for uid in initial_set.intids():
+            user = self.intids.getObject(uid)
+            profile = IUserProfile(user, None)
+
+            # Ensure we handle any missing fields
+            # If the operator is not_set, should we return users whose profile
+            # interface doesn't even define the field?
+            profile_value = getattr(profile, self.fieldName, None)
+
+            # Add to our set if it's a match, as defined by the operation
+            if self._operation(profile_value, self.value):
+                result.add(uid)
+
+        return result
+
+    def apply(self, initial_set):
+
+        if self._use_index():
+            return self._search_index(initial_set)
+
+        return self._search_objects(initial_set)
